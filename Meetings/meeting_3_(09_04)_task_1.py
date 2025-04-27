@@ -1,70 +1,78 @@
 class client:
-    def __init__(self, name):
+    def __init__(self, name, pkey):
         self.name = name
+        self.pkey = pkey
+        
+    def register_server(self, serv):
+        self.server = serv
     
-    def convert(self, message):
-        msg = ord(str(message))
-        return msg
-    
-    def send_message(self, msg, pkey):
-        request = msg**pkey
-        return request
+    def send_message(self, msg):
+        msg = ord(str(msg))
+        request = msg**self.pkey
+        print (f"{self.name}'s request: {request}")
+        return serv.receive_message(request, self)
 
 class server:
-    def receive_message(self, request, skey):
-        finaloutput = request**skey
-        return finaloutput
+    def __init__(self, finalkey, database):
+        self.finalkey = finalkey
+        self.skeys = {}
+        self.database = database
+
+    def register_client(self, client):
+        skey = self.finalkey / client.pkey
+        self.skeys[client.name] = skey
     
-    def index(self, finaloutput):
-        value = database.get(finaloutput)
+    def receive_message(self, request, client):
+        skey = self.skeys[client.name]
+        finaloutput = request**skey
+        print (f"Final output from {client.name}'s request: {finaloutput}")
+        value = self.database.get(finaloutput)
         return value
+    
+    
+def register(client, server):
+    client.register_server(server)
+    server.register_client(client)
 
-serv = server()
+finalkey = float(input("Choose a final key: "))
 
-Alice = client("Alice")
-Bob = client("Bob")
+serv = server(finalkey, database = {
+    int(ord(str(2)))**finalkey: "apple",
+    int(ord(str(3)))**finalkey: "orange",
+    int(ord(str(4)))**finalkey: "banana"
+})
 
 valid = False
 
 while not valid:
     Alice_pkey = int(input("Choose an integer for Alice's private key: "))
-    Alice_skey = int(input("Choose an integer for Alice's server key: "))
-    Alice_key = Alice_pkey*Alice_skey
+    Alice_skey = finalkey/Alice_pkey
 
     Bob_pkey = int(input("Choose an integer for Bob's private key: "))
-    Bob_skey = int(input("Choose an integer for Bob's server key: "))
-    Bob_key = Bob_pkey*Bob_skey
+    Bob_skey = finalkey/Bob_pkey
     
-    if Alice_key == Bob_key:
+    if Alice_pkey*Alice_skey == Bob_pkey*Bob_skey:
         print("Keys are valid")
         valid = True
         break
     else:
-        print("Choose a distinct pair of integers for each person, such that the product of the integers in each pair is equal")
+        print("These keys don't work. (For best results, choose integers that the final key is divisible by.)")
 
-database = {
-    int(ord(str(2)))**Alice_key: "apple",
-    int(ord(str(3)))**Alice_key: "orange",
-    int(ord(str(4)))**Alice_key: "banana"
-}
+Alice = client("Alice", Alice_pkey)
+Bob = client("Bob", Bob_pkey)
 
-Alice_msg = Alice.convert(int(input("Input an integer from 2 to 4 (Alice's message): ")))
-Alice_req = Alice.send_message(Alice_msg, Alice_pkey)
-print(f"Request sent to server by Alice: {Alice_req}")
-Alice_output = serv.receive_message(Alice_req, Alice_skey)
-print(f"Server output for Alice's request: {Alice_output}")
-Alice_returnvalue = serv.index(Alice_output)
+register(Alice, serv)
+register(Bob, serv)
+
+Alice_msg = int(input("Input an integer from 2 to 4 (Alice's message): "))
+Alice_returnvalue = Alice.send_message(Alice_msg)
 print(f"Item returned: {Alice_returnvalue}")
 
-Bob_msg = Bob.convert(int(input("Input the same integer as Alice's message for Bob's message: ")))
-Bob_req = Bob.send_message(Bob_msg, Bob_pkey)
-print(f"Request sent to server by Bob: {Bob_req}")
-Bob_output = serv.receive_message(Bob_req, Bob_skey)
-print(f"Server output for Bob's request: {Bob_output}")
-Bob_returnvalue = serv.index(Bob_output)
+Bob_msg = int(input("Input the same integer as Alice's message for Bob's message: "))
+Bob_returnvalue = Bob.send_message(Bob_msg)
 print(f"Item returned: {Bob_returnvalue}")
 
-if serv.index(Alice_output) == serv.index(Bob_output):
+if Alice_returnvalue == Bob_returnvalue:
     print("Output is valid")
 else:
     print("Output is invalid")
