@@ -33,19 +33,33 @@ while chainCount < 100:
   rainbowTable[value] = message
   chainCount += 1
 
-print(rainbowTable)
-
 print("Start Testing")
 
 hashCount = 1
+testCount = 0
+flag = False
 
 while hashCount < 2**17:
   message = gen()
   hashValue = H(message)
   for i in rainbowTable.keys():
+    testCount = 0
+    message1 = i
     if rainbowTable[i] == hashValue:
-      message1 = i
       flag = True
+    else:
+      while testCount <= k:
+        message2 = H(message1)
+        message1 = R(message2)
+        if message1 == hashValue:
+          flag = True
+          collision = message2
+        elif message2 == hashValue:
+          flag = True
+          collision = message1
+        testCount += 1
+    if flag == True:
+      message1 = i
       while flag == True:
         message2 = H(message1)
         message1 = R(message2)
