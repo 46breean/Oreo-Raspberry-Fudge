@@ -41,22 +41,19 @@ flag = False
 
 while hashCount < 2**17:
   message = gen()
-  hashValue = H(message)
-  for i in rainbowTable.keys():
-    testCount = 0
-    message1 = i
-    if rainbowTable[i] == hashValue:
-      flag = True
-    else:
-      while testCount <= k:
-        message2 = H(message1)
-        message1 = R(message2)
-        if message1 == hashValue:
-          flag = True
-          collision = message2
-        elif message2 == hashValue:
+  message1 = message
+  testCount = 0
+  while testCount <= k:
+    message2 = H(message1)
+    message1 = R(message2)
+    while flag == False:
+      for i in rainbowTable.keys():
+        if rainbowTable[i] == message1:
           flag = True
           collision = message1
+        elif rainbowTable[i] == message2:
+          flag = True
+          collision = message2
         testCount += 1
     if flag == True:
       message1 = i
