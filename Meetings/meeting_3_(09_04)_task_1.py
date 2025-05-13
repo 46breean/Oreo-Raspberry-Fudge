@@ -4,7 +4,11 @@ import random
 class client:
     def __init__(self, name):
         self.name = name
-        
+    
+    def register(self, referral_client=None):
+        self.server = serv
+        self.server.register_client(self, referral_client)
+
     def register_server(self, serv):
         self.server = serv
         self.pkey = random.randint(1, 3)
@@ -16,8 +20,8 @@ class client:
         return factor        
     
     def blinding_1(self, msg):
-        message = msg
-        msg = hash(message)
+        msg = hash(msg)
+        print(msg)
         self.r_1 = random.randint(1, 3)
         a = (msg**self.pkey)**self.r_1
         c = self.server.blinding_2(a, self)**(1/self.r_1)
@@ -54,7 +58,6 @@ class server:
         self.r_2 = random.randint(1, 3)
         skey = self.skeys[client.name]
         b = (a**skey)**self.r_2
-        print(b)
         return b
     
     def get_object (self, c):
@@ -65,15 +68,15 @@ class server:
 def hash(message):
     m = hashlib.md5()
     m.update(message.encode("utf-8"))
-    return(int(m.hexdigest(), 16))
+    return(int(m.hexdigest(), 16)%10000)
 
 serv = server()
 
 Alice = client("Alice")
 Bob = client("Bob")
 
-serv.register_client(Alice)
-serv.register_client(Bob, Alice)
+Alice.register()
+Bob.register(Alice)
 
 msg = input("Input an integer from 2 to 4 (Alice's message): ")
 object = input("(Alice) Register an object:")
