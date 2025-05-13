@@ -50,7 +50,9 @@ class server:
 
     def register_object(self, c, object): 
         message = int(c**(1/self.r_2))
+        print(f"Alice's message {message}")
         d = hash(message)
+        print(f"Alice d {d}")
         self.database[d] = object
     
     def blinding_2(self, a, client):
@@ -61,7 +63,9 @@ class server:
     
     def get_object (self, c):
         message = int(c**(1/self.r_2))
+        print(f"Bob's message {message}")
         d = hash(message)
+        print(f"Bob's d {d}")
         return self.database[d]
     
 def hash(message):
@@ -79,13 +83,13 @@ Alice.register()
 Bob.register(Alice)
 
 msg = input("Input an integer from 2 to 4 (Alice's message): ")
-object = input("(Alice) Register an object:")
+object = input("(Alice) Register an object: ")
 Alice.register_object(msg, object)
 Alice_registeredobject = object
 
-msg = input("Input the same integer as Alice's message for Bob's message:")
+msg = input("Input the same integer as Alice's message for Bob's message: ")
 Bob_returnvalue = Bob.get_object(msg)
-print(Bob_returnvalue)
+print(f"The object retrieved is {Bob_returnvalue}.")
 
 if Alice_registeredobject == Bob_returnvalue:
     print("Output is valid")
