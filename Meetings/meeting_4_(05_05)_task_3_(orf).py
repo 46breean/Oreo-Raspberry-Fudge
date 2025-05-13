@@ -1,5 +1,8 @@
 import hashlib
 import random
+from fastapi import FastAPI
+
+app = FastAPI()
 
 class client:
     def __init__(self, name):
