@@ -21,7 +21,6 @@ class client:
     
     def blinding_1(self, msg):
         msg = hash(msg)
-        print(msg)
         self.r_1 = random.randint(1, 3)
         a = (msg**self.pkey)**self.r_1
         c = self.server.blinding_2(a, self)**(1/self.r_1)
@@ -67,6 +66,7 @@ class server:
     
 def hash(message):
     m = hashlib.md5()
+    message = str(message)
     m.update(message.encode("utf-8"))
     return(int(m.hexdigest(), 16)%10000)
 
@@ -85,6 +85,7 @@ Alice_registeredobject = object
 
 msg = input("Input the same integer as Alice's message for Bob's message:")
 Bob_returnvalue = Bob.get_object(msg)
+print(Bob_returnvalue)
 
 if Alice_registeredobject == Bob_returnvalue:
     print("Output is valid")
