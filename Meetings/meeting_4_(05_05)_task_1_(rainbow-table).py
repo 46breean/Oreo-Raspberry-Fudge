@@ -41,7 +41,8 @@ flag = False
 
 while hashCount < 2**17:
   message = gen()
-  message1 = message
+  hashValue = H(message)
+  message1 = hashValue
   testCount = 0
   while testCount <= k:
     message2 = H(message1)
