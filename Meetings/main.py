@@ -11,15 +11,15 @@ app = FastAPI()
 
 def client_initialize(uid,did,rid):
   if (uid,did,rid) in ClientInitialized:
-    return("User " + str(uid) + " has been previsouly initialized.")
     flag1 = False
+    return("User " + str(uid) + " has been previsouly initialized.")
   else:
     ClientInitialized.append((uid,did,rid))
 
 def server_initialize(uid,did,rid):
   if (uid,did,rid) in Registered:
-    return("Device " + str(did) + " has been previously registered.")
     flag1 = False
+    return("Device " + str(did) + " has been previously registered.")
   else:
     RegisteredDevices[(uid,rid)]=(did)
     Registered.append((uid,did,rid))
@@ -27,28 +27,28 @@ def server_initialize(uid,did,rid):
 
 def client_start_registration(uid,did1,did2,rid):
   if (uid,did1,rid) not in ClientInitialized:
-    return("User " + str(uid) + " has not been initialized.")
     flag1 = False
+    return("User " + str(uid) + " has not been initialized.")
   else:
     ClientStartRegistration.append((uid,did1,did2,rid))
 
 def client_finish_registration(uid,did1,did2,rid):
   if (uid,did2,rid) in ClientInitialized:
+    flag1 = False
     return("Device " + str(did2) + " has been previously registered.")
-    flag1 = False
   elif (uid,did1,did2,rid) not in ClientStartRegistration:
-    return("User " + str(uid) + " has not started registration.")
     flag1 = False
+    return("User " + str(uid) + " has not started registration.")
   else:
     ClientInitialized.append((uid,did2,rid))
 
 def server_accept_registration(uid,did1,did2,rid):
   if (uid,did2,rid) in Registered:
+    flag1 = False
     return("Device " + str(did2) + " has been previously registered.")
-    flag1 = False
   elif (uid,did1,did2,rid) not in ClientStartRegistration:
-    return("User " + str(uid) + " has not started registration.")
     flag1 = False
+    return("User " + str(uid) + " has not started registration.")
   elif (uid,did1,rid) not in Registered:
     return("User " + str(uid) + " does not have any previously registered device.")
   else:
@@ -122,3 +122,5 @@ def fn_selection():
       print("Invalid command, please try again.")
 
 fn_selection()
+
+#x = requests.get("http://127.0.0.1:8000")
