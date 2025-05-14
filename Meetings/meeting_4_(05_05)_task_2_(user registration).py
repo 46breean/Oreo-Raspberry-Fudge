@@ -1,12 +1,15 @@
 import random
 import hashlib
+from fastapi import FastAPI
 ClientInitialized = []
 ClientStartRegistration = []
 ServerKeys = {}
 Registered = []
 RegisteredDevices = {}
 
+app = FastAPI()
 
+@app.get("/client_initialize")
 def client_initialize(uid,did,rid):
   if (uid,did,rid) in ClientInitialized:
     return("User " + str(uid) + " has been previsouly initialized.")
@@ -14,6 +17,7 @@ def client_initialize(uid,did,rid):
   else:
     ClientInitialized.append((uid,did,rid))
 
+@app.get("/server_initialize")
 def server_initialize(uid,did,rid):
   if (uid,did,rid) in Registered:
     return("Device " + str(did) + " has been previously registered.")
@@ -23,6 +27,7 @@ def server_initialize(uid,did,rid):
     Registered.append((uid,did,rid))
     return("User " + str(uid) + " has been successfully initialized and device " + str(did) + " has been registered.")
 
+@app.get("/client_start_registration")
 def client_start_registration(uid,did1,did2,rid):
   if (uid,did1,rid) not in ClientInitialized:
     return("User " + str(uid) + " has not been initialized.")
@@ -30,6 +35,7 @@ def client_start_registration(uid,did1,did2,rid):
   else:
     ClientStartRegistration.append((uid,did1,did2,rid))
 
+@app.get("/client_finish_registration")
 def client_finish_registration(uid,did1,did2,rid):
   if (uid,did2,rid) in ClientInitialized:
     return("Device " + str(did2) + " has been previously registered.")
@@ -40,6 +46,7 @@ def client_finish_registration(uid,did1,did2,rid):
   else:
     ClientInitialized.append((uid,did2,rid))
 
+@app.get("/server_accept_registration")
 def server_accept_registration(uid,did1,did2,rid):
   if (uid,did2,rid) in Registered:
     return("Device " + str(did2) + " has been previously registered.")
@@ -59,6 +66,7 @@ def server_accept_registration(uid,did1,did2,rid):
     Registered.append((uid,did2,rid))
     return("User " + str(uid) + " has successfully registered device " + str(did2) + ".")
 
+@app.get("/server_revocation")
 def server_revocation(uid,did,rid):
   if (uid,did,rid) not in Registered:
     return("Device " + str(did) + " has not been registered.")
