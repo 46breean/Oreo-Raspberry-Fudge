@@ -7,7 +7,7 @@ app = FastAPI()
 class client:
     def __init__(self, name):
         self.name = name
-    
+
     def register(self, referral_client=None):
         self.server = serv
         self.server.register_client(self, referral_client)
