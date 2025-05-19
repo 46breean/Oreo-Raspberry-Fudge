@@ -6,6 +6,7 @@ ClientStartRegistration = []
 ServerKeys = {}
 Registered = []
 RegisteredDevices = {}
+Clients = {}
 
 app = FastAPI()
 
@@ -82,7 +83,9 @@ def fn_selection():
   while flag2 == True:
     command=input("Enter 1 to initialize a new client, 2 to register a new device, 3 to revoke a current device, and 4 to check all registered clients.")
     if command=="1":
-      uid=input("Username:")
+      name=input("Username:")
+      uid=random.randint(1,10)
+      Clients[name]=uid
       did=input("Device:")
       rid=random.randint(1,10)
       if uid in ServerKeys.keys():
@@ -96,7 +99,8 @@ def fn_selection():
         print(server_initialize(uid,did,rid))
       flag1 = True
     elif command=="2":
-      uid=input("Username:")
+      name=input("Username:")
+      uid=Clients[name]
       did1=input("Original device:")
       did2=input("New device:")
       if uid not in ServerKeys.keys():
@@ -112,7 +116,8 @@ def fn_selection():
         print(server_accept_registration(uid,did1,did2,rid))
       flag1 = True
     elif command=="3":
-      uid=input("Username:")
+      name=input("Username:")
+      uid=Clients[name]
       did=input("Device to revoke:")
       rid = ServerKeys[uid]
       print(server_revocation(uid,did,rid))
