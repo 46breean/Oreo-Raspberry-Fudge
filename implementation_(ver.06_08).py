@@ -2,12 +2,7 @@ from primePy import primes
 import random
 import sys
 
-#prime generator
-
-p = 997
-
-#set of primes
-
+primeGen = 997
 primeList = primes.upto(1000)
 
 class Device:
