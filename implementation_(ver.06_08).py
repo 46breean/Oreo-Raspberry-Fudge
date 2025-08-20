@@ -1,6 +1,8 @@
 from primePy import primes
 import random
 import sys
+import hashlib
+import math
 
 primeGen = 997
 primeList = primes.upto(1000)
@@ -62,12 +64,28 @@ class Device:
       valid = server.deviceRevocation(self,"Revoke selected DID",DIDtoRevoke)
     
     print(f"Device with DID {DIDtoRevoke} has been successfully revoked.")
-  
-  #evaluation function
 
-  def evaluate(self):
-    str(input("What would you like to index for?"))
-    pass
+  #evaluation functions
+
+  def hash(msg):
+    m = hashlib.sha256()
+    msg = str(msg)
+    m.update(msg.encode())
+    return(int(m.hexdigest(), 16))
+
+  def evaluate(self,server):
+    def random_coprime(p_minus_1):
+      while True:
+        r = random.randint(2, p_minus_1)
+        if math.gcd(r, p_minus_1) == 1:
+          return r
+    r1 = random_coprime(self.p-1)
+    x = int(input("Enter a number to evaluate:"))
+    Hx = hash(x)
+    blinded = pow(Hx, self.DK * r1, self.p)
+    blinded2 = server.servblinding(self.UID, self.DID, blinded)
+    unblinded1 = pow(blinded2, pow(r1, -1, self.p-1), self.p)
+    server.evaluate(unblinded1)
 
 
 
@@ -173,6 +191,23 @@ class Server:
         return True
   def evaluate(self,Device,message):
     pass
+
+  #evaluation functions
+
+  def servblinding(self, UID, DID, blinded):
+    def random_coprime(p_minus_1):
+      while True:
+        r = random.randint(2, p_minus_1)
+        if math.gcd(r, p_minus_1) == 1:
+          return r
+    self.r2 = random_coprime(self.p-1)
+    DSK = self.DB1[(UID, DID)]
+    blinded2 = pow(blinded, DSK * self.r2, self.p)
+    return blinded2
+
+  def evaluate(self,unblinded1):
+    final_eval = pow(unblinded1, pow(self.r2, -1, self.p-1), self.p)
+    print (final_eval)
 
 DBname, DB1, DB2, DB3 = {}, {}, {}, {}
 server = Server(DB1,DB2,DB3)
