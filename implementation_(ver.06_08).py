@@ -16,6 +16,7 @@ class Device:
     self.UID = UID
     self.DID = DID
     self.DK = DK
+    self.p = server.p
 
     DBname[self.name] = self
 
@@ -93,10 +94,11 @@ class Server:
 
   #attributes
 
-  def __init__(self,DB1,DB2,DB3):
+  def __init__(self,DB1,DB2,DB3,p=7919):
     self.DB1 = DB1
     self.DB2 = DB2
     self.DB3 = DB3
+    self.p = p
   
   #function selection
 
@@ -114,17 +116,17 @@ class Server:
     if function == 1:
       deviceName = input("What would you like to name your device? ")
       deviceName = Device(deviceName)
-      deviceName.initialiseDevice(server)
+      deviceName.initialiseDevice(self)
     elif function == 2:
       device = server.retrieveDevice()
       newDeviceName = input("What would you like to name your new device? ")
-      device.registerDevice(newDeviceName,server)
+      device.registerDevice(newDeviceName,self)
     elif function == 3:
       device = server.retrieveDevice()
-      device.revokeDevice(server)
+      device.revokeDevice(self)
     elif function == 4:
       device = server.retrieveDevice()
-      device.evaluate()
+      device.evaluate(self)
     elif function == 5:
       for (uid, did), dsk in server.DB1.items():
         print(f"Server database entry → UID: {uid}, DID: {did}, DSK: {dsk}")
