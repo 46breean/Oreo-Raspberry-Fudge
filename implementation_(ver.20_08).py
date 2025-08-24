@@ -5,9 +5,9 @@ import hashlib
 import math
 import sympy
 
-primeList = primes.upto(104729) #104729 has 10 000 primes
+primeList = primes.upto(104729) #104729 is the 10 000th prime number
 
-def random_coprime(p_minus_1):
+def random_coprime(p_minus_1): #randomly generate a number coprime to an input integer
     while True:
         r = random.randint(2, p_minus_1)
         if math.gcd(r, p_minus_1) == 1:
@@ -30,7 +30,7 @@ class Device:
 
     def keyDev(self):
         base = 1
-        for i in range(100):
+        for i in range(100): #key is the product of 100 primes (with possible repetition)
             pick = random.choice(primeList)
             base *= pick
         return base
@@ -52,7 +52,7 @@ class Device:
             n = random.choice(factors)
             newDID = server.deviceRegistration(self,n)
 
-        newDK = self.DK//n
+        newDK = self.DK//n #newDK is a random factor of original DK
         
         device2 = Device(name,self.UID,newDID,newDK)
         print(f"New device successfully registered with UID {device2.UID}, DID {device2.DID}, DK {device2.DK}")
@@ -62,14 +62,14 @@ class Device:
 
     def revokeDevice(self,server):
         existingDIDs = server.deviceRevocation(self,"Retrieve DIDs")
-        if existingDIDs == None:
+        if existingDIDs == None: #no devices have been registered
             return
         valid = False
         while not valid:
             print(f"DIDs of registered, not yet revoked devices: {existingDIDs}")
             while True:
                 try:
-                    DIDtoRevoke = int(input("Please type the DID of the device that you would like to revoke: "))
+                    DIDtoRevoke = int(input("Please type the DID of the device that you would like to revoke: ")) #user inputs DID of compromised device
                     break
                 except ValueError:
                     print("Invalid input, please enter an integer. ")
@@ -80,7 +80,7 @@ class Device:
     #evaluation functions
 
     def hash(msg):
-        m = hashlib.sha256()
+        m = hashlib.sha256() #can be replaced with any hash function
         msg = str(msg)
         m.update(msg.encode())
         return(int(m.hexdigest(), 16))
@@ -89,10 +89,10 @@ class Device:
         r1 = random_coprime(self.p-1)
         x = int(input("Enter a number to evaluate:"))
         Hx = hash(x)
-        blinded = pow(Hx, self.DK * r1, self.p)
-        blinded2 = server.servblinding(self.UID, self.DID, blinded)
-        unblinded1 = pow(blinded2, pow(r1, -1, self.p-1), self.p)
-        server.evaluate(unblinded1)
+        blinded = pow(Hx, self.DK * r1, self.p) #x to the power of r1*DK
+        blinded2 = server.servblinding(self.UID, self.DID, blinded) #blinding on the server's side
+        unblinded1 = pow(blinded2, pow(r1, -1, self.p-1), self.p) #unblinding on the device's side
+        server.evaluate(unblinded1) #unblinding on the server's side
 
 
 
@@ -150,7 +150,7 @@ class Server:
         DID = random.randint(1000000000,9999999999)
         DSK = random.randint(1,1000000)
 
-        self.userDataDB[(UID,DID)] = DSK
+        self.userDataDB[(UID,DID)] = DSK #databse storing mappings of (UID,DID) to DSK
 
         return UID, DID
 
@@ -168,15 +168,15 @@ class Server:
         
         existingDIDs = [DID for (UID,DID),DSK in userDataDB.items() if UID == Device.UID]
         existingDSKs = [DSK for (UID,DID),DSK in userDataDB.items() if UID == Device.UID]
-        newDSK = DSK*n
+        newDSK = DSK*n #newDSK is a multiple of original DSK
         for DSKs in existingDSKs:
-            if newDSK == DSKs:
+            if newDSK == DSKs: #identical DSK has been used for another device
                 print("n generated is invalid, retrying...")
                 return None
 
         while True:
             newDID = random.randint(1000000000,9999999999)
-            if newDID not in existingDIDs:
+            if newDID not in existingDIDs: #check that identical DID has not been used for another device
                 break
     
         self.userDataDB[(Device.UID,newDID)] = newDSK
@@ -185,7 +185,7 @@ class Server:
     #revocation function
 
     def deviceRevocation(self,Device,message,DIDtoRevoke=None):
-        existingDIDs = [DID for (UID,DID),DSK in userDataDB.items() if UID == Device.UID and DSK != None]
+        existingDIDs = [DID for (UID,DID),DSK in userDataDB.items() if UID == Device.UID and DSK != None] #check that device exists and is not already revoked
 
         if message == "Retrieve DIDs":
             try:
@@ -214,9 +214,9 @@ class Server:
     #evaluation functions
 
     def servblinding(self, UID, DID, blinded):
-        self.r2 = random_coprime(self.p-1)
+        self.r2 = random_coprime(self.p-1) #random blinding scalar
         DSK = self.userDataDB[(UID, DID)]
-        blinded2 = pow(blinded, DSK * self.r2, self.p)
+        blinded2 = pow(blinded, DSK * self.r2, self.p) #blinded to the power of DSK*r2
         return blinded2
 
     def evaluate(self,unblinded1):
