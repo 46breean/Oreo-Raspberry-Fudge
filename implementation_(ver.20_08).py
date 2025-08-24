@@ -5,7 +5,7 @@ import hashlib
 import math
 import sympy
 
-primeList = primes.upto(100) #104729 has 10 000 primes
+primeList = primes.upto(104729) #104729 has 10 000 primes
 
 def random_coprime(p_minus_1):
     while True:
@@ -30,7 +30,7 @@ class Device:
 
     def keyDev(self):
         base = 1
-        for i in range(10):
+        for i in range(100):
             pick = random.choice(primeList)
             base *= pick
         return base
