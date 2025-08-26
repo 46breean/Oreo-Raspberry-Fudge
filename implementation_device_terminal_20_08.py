@@ -21,7 +21,7 @@ primeList = primes.upto(104729)
 
 def keyDev():
         base = 1
-        for i in range(10):
+        for i in range(100):
             pick = random.choice(primeList)
             base *= pick
         return base
