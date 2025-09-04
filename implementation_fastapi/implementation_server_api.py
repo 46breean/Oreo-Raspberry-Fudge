@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 import random, math
 from typing import Dict, Tuple, Optional
+import random
 
 userDataDB: Dict[Tuple[int, int], Optional[int]] = {}
 nameDB, indexDataDB, encDB = {}, {}, {}
@@ -27,6 +28,7 @@ def random_coprime(p_minus_1: int) -> int:
 class InitResponse(BaseModel):
     UID: int
     DID: int
+    name: str
 
 class RegisterRequest(BaseModel):
     uid: int
@@ -67,12 +69,14 @@ def get_config():
     return {"p": P}
 
 @app.post("/init", response_model=InitResponse)
-def init_device():
+def init_device(name: str = Query(...)):
     UID = random.randint(10**9, 10**10 - 1)
     DID = random.randint(10**9, 10**10 - 1)
     DSK = random.randint(1, 10**6)
     userDataDB[(UID, DID)] = DSK
-    return {"UID": UID, "DID": DID}
+    nameDB[(UID, DID)] = name
+    return {"UID": UID, "DID": DID, "name": name}
+
 
 @app.post("/register", response_model=RegisterResponse)
 def register_device(req: RegisterRequest):
@@ -83,11 +87,11 @@ def register_device(req: RegisterRequest):
     if DSK is None:
         raise HTTPException(status_code=403, detail="Current device has been revoked")
     
-    existing_dsks = [dsk for (u, d), dsk in userDataDB.items() if u == req.uid]
+    existing_dsks = [dsk for (u, d), dsk in userDataDB.items() if u == req.uid] # current code doesn't check if dsk clashes, will fix in
     new_dsk = DSK * req.factor
     if new_dsk in existing_dsks:
-        print("Factor generated is invalid. Retrying...")
-        return None
+        raise HTTPException(status_code=409, detail="Factor generated is invalid")
+
 
     existing_dids = [d for (u, d), _ in userDataDB.items() if u == req.uid]
     while True:
@@ -110,7 +114,9 @@ def revoke_list(uid: int = Query(...), did: int = Query(...)):
     return {"dids": dids}
 
 @app.post("/revoke")
+
 def revoke(req: RevokeRequest):
+
     current = (req.uid, req.did)
     target = (req.uid, req.revoke_did)
     if current not in userDataDB:
@@ -128,9 +134,11 @@ def revoke(req: RevokeRequest):
 @app.post("/eval/step1", response_model=EvalStep1Response)
 def eval_step1(req: EvalStep1Request):
     key = (req.uid, req.did)
-    DSK = userDataDB.get(key)
-    if DSK is None:
-        raise HTTPException(status_code=400, detail="Device not found or revoked")
+    DSK = userDataDB[key]    
+    if key not in userDataDB:
+        raise HTTPException(status_code=400, detail="Current device not registered")
+    elif userDataDB[key] is None:
+        raise HTTPException(status_code=403, detail="Current device has been revoked")
 
     r2 = random_coprime(P - 1)
     r2_store[key] = r2
