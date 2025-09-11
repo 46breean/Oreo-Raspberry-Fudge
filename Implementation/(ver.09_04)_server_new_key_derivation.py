@@ -1,0 +1,33 @@
+def deviceInitialisation(self,unused):
+  UID = random.randint(1000000000,9999999999)
+  DID = random.randint(1000000000,9999999999)
+  baseDSK = random.randint(1,1000000)
+  DSK = baseDSK*unused
+  self.userDataDB[(UID,DID)] = DSK #databse storing mappings of (UID,DID) to DSK
+  return UID, DID
+
+def deviceRegistration(self,Device,newDK,unused):
+  try:
+    DSK = self.userDataDB[(Device.UID,Device.DID)]
+  except KeyError:
+    print("You are currenty using a non-registered device, and therefore cannot register other devices.")
+    return None
+  if DSK == None:
+    print("The device you are currently using has been revoked, therefore you are not allowed to execute this function.")
+    return None
+
+  existingDIDs = [DID for (UID,DID),DSK in userDataDB.items() if UID == Device.UID]
+  existingDSKs = [DSK for (UID,DID),DSK in userDataDB.items() if UID == Device.UID]
+  newDSK = baseDSK*unused
+  for DSKs in existingDSKs:
+    if newDSK == DSKs: #identical DSK has been used for another device
+      print("DK generated is invalid, retrying...")
+      return None
+
+  while True:
+    newDID = random.randint(1000000000,9999999999)
+    if newDID not in existingDIDs: #check that identical DID has not been used for another device
+      break
+
+  self.userDataDB[(Device.UID,newDID)] = newDSK
+  return newDID

@@ -5,7 +5,7 @@ import hashlib
 import math
 import sympy
 
-primeList = primes.upto(104729) #104729 is the 10 000th prime number
+primeList = primes.upto(1000) #104729 is the 10 000th prime number
 
 def random_coprime(p_minus_1): #randomly generate a number coprime to an input integer
     while True:
@@ -39,8 +39,8 @@ class Device:
 
     def initialiseDevice(self,server):
         self.DK = self.keyDev()
-        self.UID, self.DID = server.deviceInitialisation()
-        print(f"User and device successfully initialised with UID {self.UID}, DID {self.DID}, DK {self.DK}")
+        self.UID, self.DID, cert = server.deviceInitialisation()
+        print(f"User and device successfully initialised with UID {self.UID}, DID {self.DID}, DK {self.DK}\nYour school certificate is {cert}")
     
     #registration function
 
@@ -50,12 +50,12 @@ class Device:
         newDID = None
         while newDID is None:
             n = random.choice(factors)
-            newDID = server.deviceRegistration(self,n)
+            newDID,cert = server.deviceRegistration(self,n)
 
         newDK = self.DK//n #newDK is a random factor of original DK
         
         device2 = Device(name,self.UID,newDID,newDK)
-        print(f"New device successfully registered with UID {device2.UID}, DID {device2.DID}, DK {device2.DK}")
+        print(f"New device successfully registered with UID {device2.UID}, DID {device2.DID}, DK {device2.DK}\nYour school certificate is {cert}")
         return device2
     
     #revocation function
@@ -70,38 +70,24 @@ class Device:
             while True:
                 try:
                     DIDtoRevoke = int(input("Please type the DID of the device that you would like to revoke: ")) #user inputs DID of compromised device
+                except ValueError:
+                    print("Invalid input, please enter an integer. ")
+                try:
+                    cert = int(input("Please input your school certificate for verification."))
                     break
                 except ValueError:
                     print("Invalid input, please enter an integer. ")
-            valid = server.deviceRevocation(self,"Revoke selected DID",DIDtoRevoke)
+            valid = server.deviceRevocation(self,"Revoke selected DID",cert,DIDtoRevoke)
         
         print(f"Device with DID {DIDtoRevoke} has been successfully revoked.")
-
-    #evaluation functions
-
-    def hash(msg):
-        m = hashlib.sha256() #can be replaced with any hash function
-        msg = str(msg)
-        m.update(msg.encode())
-        return(int(m.hexdigest(), 16))
-
-    def evaluate(self,server):
-        r1 = random_coprime(self.p-1)
-        x = int(input("Enter a number to evaluate:"))
-        Hx = hash(x)
-        blinded = pow(Hx, self.DK * r1, self.p) #x to the power of r1*DK
-        blinded2 = server.servblinding(self.UID, self.DID, blinded) #blinding on the server's side
-        unblinded1 = pow(blinded2, pow(r1, -1, self.p-1), self.p) #unblinding on the device's side
-        server.evaluate(unblinded1) #unblinding on the server's side
-
-
 
 class Server:
 
     #attributes
 
-    def __init__(self,userDataDB,indexDataDB,encDB,p=29996224275833):
+    def __init__(self,userDataDB,userCertDB,indexDataDB,encDB,p=29996224275833):
         self.userDataDB = userDataDB
+        self.userCertDB = userCertDB
         self.indexDataDB = indexDataDB
         self.encDB = encDB
         self.p = p
@@ -149,19 +135,22 @@ class Server:
         UID = random.randint(1000000000,9999999999)
         DID = random.randint(1000000000,9999999999)
         DSK = random.randint(1,1000000)
+        cert = random.randint(1000000000,9999999999)
 
-        self.userDataDB[(UID,DID)] = DSK #databse storing mappings of (UID,DID) to DSK
-
-        return UID, DID
+        self.userDataDB[(UID,DID)] = DSK #database storing mappings of (UID,DID) to DSK
+        self.userCertDB[UID] = cert
+        return UID, DID, cert
 
     #registration function
 
     def deviceRegistration(self,Device,n):
-        try:
-            DSK = self.userDataDB[(Device.UID,Device.DID)]
-        except KeyError:
-            print("You are currenty using a non-registered device, and therefore cannot register other devices.")
-            return None
+        while True:
+            try:
+                DSK = self.userDataDB[(Device.UID,Device.DID)]
+                break
+            except KeyError:
+                print("You are currenty using a non-registered device, and therefore cannot register other devices.")
+                return None
         if DSK == None:
             print("The device you are currently using has been revoked, therefore you are not allowed to execute this function.")
             return None
@@ -180,11 +169,13 @@ class Server:
                 break
     
         self.userDataDB[(Device.UID,newDID)] = newDSK
-        return newDID
+        cert = self.userCertDB[Device.UID]
+
+        return newDID,cert
     
     #revocation function
 
-    def deviceRevocation(self,Device,message,DIDtoRevoke=None):
+    def deviceRevocation(self,Device,message,DIDtoRevoke=None,cert=None):
         existingDIDs = [DID for (UID,DID),DSK in userDataDB.items() if UID == Device.UID and DSK != None] #check that device exists and is not already revoked
 
         if message == "Retrieve DIDs":
@@ -199,6 +190,9 @@ class Server:
             else:
                 return existingDIDs
         if message == "Revoke selected DID":
+            if cert != self.userCertDB[Device.UID]:
+                print("You have provided an invalid certificate.")
+                return False
             if DIDtoRevoke not in existingDIDs:
                 print("Device has not yet been registered.")
                 return False
@@ -208,22 +202,8 @@ class Server:
             else:
                 self.userDataDB[(Device.UID,DIDtoRevoke)] = None
                 return True
-    def evaluate(self,Device,message):
-        pass
 
-    #evaluation functions
-
-    def servblinding(self, UID, DID, blinded):
-        self.r2 = random_coprime(self.p-1) #random blinding scalar
-        DSK = self.userDataDB[(UID, DID)]
-        blinded2 = pow(blinded, DSK * self.r2, self.p) #blinded to the power of DSK*r2
-        return blinded2
-
-    def evaluate(self,unblinded1):
-        final_eval = pow(unblinded1, pow(self.r2, -1, self.p-1), self.p)
-        print (final_eval)
-
-nameDB, userDataDB, indexDataDB, encDB = {}, {}, {}, {}
-server = Server(userDataDB,indexDataDB,encDB)
+nameDB, userDataDB, userCertDB, indexDataDB, encDB = {}, {}, {}, {}, {}
+server = Server(userDataDB,userCertDB,indexDataDB,encDB)
 
 server.fnSelection()
