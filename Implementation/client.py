@@ -17,12 +17,38 @@ def random_coprime(p_minus_1: int) -> int:
         if math.gcd(r, p_minus_1) == 1:
             return r
 
-def keyDev():
+def firstKeyDev():
+    pick = []
+    for i in range(100):
+        pick = pick.append(random.choice(primeList))
+    requirement = False
+    while requirement == False:
+        bitstring = [random.randint(0, 1) for n in range(100)]
+        if bitstring.count(1)>=50 and bitstring.count(1)<=70:
+            requirement = True
     base = 1
-    for i in range(5):
-        pick = random.choice(primeList)
-        base *= pick
-    return base
+    unused = []
+    for i in range(100):
+        if bitstring[i] ==1:
+            base *= pick[i]
+        else:
+            unused.append(pick[i])
+    return base, unused
+
+def subkeyDev(pick):
+    requirement = False
+    while requirement == False:
+        bitstring = [random.randint(0, 1) for n in range(100)]
+        if bitstring.count(1)>=50 and bitstring.count(1)<=70:
+            requirement = True
+    base = 1
+    unused = []
+    for i in range(100):
+        if bitstring[i] ==1:
+            base *= pick[i]
+        else:
+            unused.append(pick[i])
+    return base, unused
 
 def init_reg():
     while True:
@@ -38,7 +64,7 @@ def init_reg():
             UID, DID = init["UID"], init["DID"]
 
             # choosing DK and factors
-            DK = keyDev()
+            DK = firstKeyDev()
             factors = sympy.divisors(DK)
             print("Initialised:", init)
 
