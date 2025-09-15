@@ -82,6 +82,7 @@ def inbound_socket(UID, DID, DK, HOST, PORT):
                     continue
 
                 control_port = 50000 # won't work with multiple req at same time
+                #theres def a btr way to send data across terminals on same device idk why i did this
 
                 subprocess.Popen([
                     "start", "cmd", "/c",
