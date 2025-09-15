@@ -1,5 +1,6 @@
-import requests, sympy, random, math, hashlib, socket, sys, threading, time
+import requests, sympy, random, math, socket, sys, threading, time
 from primePy import primes
+from cryptography.hazmat.primitives import hashes
 
 SERVER = "http://127.0.0.1:8000"
 
@@ -7,9 +8,9 @@ p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729)
 
 def hash_int(x: int) -> int:
-    m = hashlib.sha256()
+    m = hashes.Hash(hashes.SHA256())
     m.update(str(x).encode())
-    return int(m.hexdigest(), 16)
+    return int.from_bytes(m.finalize(), byteorder="big")
 
 def random_coprime(p_minus_1: int) -> int:
     while True:
