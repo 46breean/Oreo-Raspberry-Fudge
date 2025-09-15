@@ -1,4 +1,4 @@
-import requests, sympy, random, math, hashlib, socket, sys
+import requests, sympy, random, math, hashlib, socket, sys, threading, time
 from primePy import primes
 
 SERVER = "http://127.0.0.1:8000"
@@ -50,129 +50,134 @@ def subkeyDev(pick):
             unused.append(pick[i])
     return base, unused
 
+def keyDev():
+    base = 1
+    for i in range(5):
+        pick = random.choice(primeList)
+        base *= pick
+    return base
+
+def get_local_ip():
+    """Get the LAN IP of this device."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # doesn't have to be reachable
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+    finally:
+        s.close()
+    return ip
+
+def inbound_socket(UID, DID, DK, HOST, PORT):
+    factors = sympy.divisors(DK)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind((HOST, PORT))
+        s.listen()
+        print(f"[Device {DID}] Listener started on {HOST}:{PORT}...")
+
+        while True:
+            conn, addr = s.accept()
+            with conn:
+                print(f"[Device {DID}] Incoming registration request from {addr}")
+                newdev_msg = conn.recv(1024).decode()
+                if not newdev_msg:
+                    continue
+                print("\nRegistration Request:", newdev_msg)
+                print("1. Accept Request")
+                print("2. Reject Request")
+                regreq_ans = int(input("Would you like to register this device? "))
+
+                if regreq_ans == 1:
+                    factor = random.choice(factors)
+                    try:
+                        register = requests.post(
+                            f"{SERVER}/register",
+                            json={"uid": UID, "did": DID, "factor": factor}
+                        )
+                        if register.status_code == 409:
+                            print("Factor invalid, retrying...")
+                            continue
+                        register.raise_for_status()
+                        register_data = register.json()
+                    except requests.exceptions.HTTPError as e:
+                        print(e.response.json()["detail"])
+                        continue
+
+                    new_did = register_data["new_did"]
+                    new_dk = DK // factor
+                    data = f"{new_did},{new_dk}"
+                    conn.sendall(data.encode())
+                    print(f"Sent new DID/DK to new device: {data}")
+
+                elif regreq_ans == 2:
+                    print("Rejected registration request")
+
 def init_reg():
-    while True:
-        print("\nSign Up:")
-        print("1. Initialise user")
-        print("2. Register new device")
-        choice = int(input("Select function: "))
+    print("\nSign Up:")
+    print("1. Initialise user")
+    print("2. Register new device")
+    choice = int(input("Select function: "))
 
-        if choice == 1:
-            # devname, generating UID, DID
-            name = input("Enter device name: ")
-            init = requests.post(f"{SERVER}/init", params={"name": name}).json()
-            UID, DID = init["UID"], init["DID"]
+    if choice == 1:
+        name = input("Enter device name: ")
+        init = requests.post(f"{SERVER}/init", params={"name": name}).json()
+        UID, DID = init["UID"], init["DID"]
+        DK = keyDev()
+        print("Initialised:", init)
 
-            # choosing DK and factors
-            DK = firstKeyDev()
-            factors = sympy.divisors(DK)
-            print("Initialised:", init)
+        # announce self to server
+        HOST = get_local_ip()
+        PORT = 49153
+        requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT})
 
-            # in socket
-            HOST = ''
-            PORT = 49153
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind((HOST, PORT))
-                s.listen(1)
-                conn, addr = s.accept()
-                with conn:
-                    while True:
-                        newdev_msg = conn.recv(1024)
-                        if not newdev_msg: break
-                        print("\nRegistration Request:", newdev_msg)
-                        print("1. Accept Request")
-                        print("2. Reject Request")
-                        regreq_ans = int(input("Would you like to register this device? "))
-                        
-                        if regreq_ans == 1:
+        # start listener in background
+        listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, DK, HOST, PORT), daemon=True)
+        listener_thread.start()
+        time.sleep(0.5)  # give socket time to bind
 
-                            factor = random.choice(factors)
+        return UID, DID, DK
 
-                            try:
-                                register = requests.post(
-                                    f"{SERVER}/register",
-                                    json={"uid": UID, "did": DID, "factor": factor}
-                                )
-                                if register.status_code == 409:
-                                    print("Factor invalid, retrying...")
-                                    continue
-                                register.raise_for_status()
-                                register_data = register.json()
-                                break
-                            except requests.exceptions.HTTPError as e:
-                                print(e.response.json()["detail"])
-                                input("Press Enter to continue...")
-                                return
-                        elif regreq_ans == 2: break
+    elif choice == 2:
+        UID = input("Enter your UID: ")
+        referral_did = input("Enter the DID of your referral device: ")
 
-                        new_did = register_data["new_did"]
-                        new_dk = DK//factor
-                        data = (new_did, new_dk)
-            
-            return UID, DID, DK
+        try:
+            loc = requests.get(
+                f"{SERVER}/device_location",
+                params={"uid": UID, "did": referral_did}
+            )
+            loc.raise_for_status()
+            referral_info = loc.json()
+            referral_ip = referral_info["ip"]
+            referral_port = referral_info["port"]
+        except requests.exceptions.HTTPError as e:
+            print("Could not find referral device:", e.response.json()["detail"])
+            return
 
-        elif choice == 2:
-            
-            # retrieve DID and DK
-            UID = input("Enter you UID:")
-            referral_did = input("Enter the DID of your referral device:")
-            HOST = str(UID) + str(referral_did)
-            PORT = 49153
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((HOST, PORT))
-                DID, DK = s.recv(1024)
+        # connect to referral device
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            print(f"Connecting to referral device at {referral_ip}:{referral_port}...")
+            s.connect((referral_ip, referral_port))
+            s.sendall(b"Registration Request")
+            newdev_msg = s.recv(1024).decode()
+            DID, DK = newdev_msg.split(",")
+            DID, DK = int(DID), int(DK)
 
-            factors = sympy.divisors(DK)
+        # announce self to server
+        HOST = get_local_ip()
+        PORT = 49154
+        requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT})
+        print(f"New device registered: (UID={UID}, DID={DID}, DK={DK})")
 
-            print(f"New device registered: (UID={UID}, DID={DID}, DK ={DK})")
+        # start listener
+        listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, DK, HOST, PORT), daemon=True)
+        listener_thread.start()
+        time.sleep(0.5)
 
-            ## in socket
-            HOST = str(UID, DID)
-            PORT = 49153
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind((HOST, PORT))
-                s.listen(1)
-                conn, addr = s.accept()
-                with conn:
-                    while True:
-                        newdev_msg = conn.recv(1024)
-                        if not newdev_msg: break
-                        print("\nRegistration Request:", newdev_msg)
-                        print("1. Accept Request")
-                        print("2. Reject Request")
-                        regreq_ans = int(input("Would you like to register this device? "))
-                        
-                        if regreq_ans == 1:
+        return UID, DID, DK
 
-                            factor = random.choice(factors)
 
-                            try:
-                                register = requests.post(
-                                    f"{SERVER}/register",
-                                    json={"uid": UID, "did": DID, "factor": factor}
-                                )
-                                if register.status_code == 409:
-                                    print("Factor invalid, retrying...")
-                                    continue
-                                register.raise_for_status()
-                                register_data = register.json()
-                                break
-                            except requests.exceptions.HTTPError as e:
-                                print(e.response.json()["detail"])
-                                input("Press Enter to continue...")
-                                return
-                        elif regreq_ans == 2: break
-
-                        new_did = register_data["new_did"]
-                        new_dk = DK//factor
-                        data = (new_did, new_dk)
-
-                    conn.sendall(data)
-            return UID, DID, DK
-
-def fn_selection():
-
-    UID, DID, DK = init_reg()["UID", "DID", "DK"]
+def fn_selection(UID, DID, DK):
 
     while True:
         print("\nDevice Menu:")
@@ -235,5 +240,5 @@ def fn_selection():
         else:
             print("Invalid choice.")
 
-init_reg()
-fn_selection()
+UID, DID, DK = init_reg()
+fn_selection(UID, DID, DK)

@@ -64,6 +64,19 @@ class EvalStep2Response(BaseModel):
     final: int
 
 # endpoints
+device_locations = {}  # (uid, did) -> (ip, port)
+
+@app.post("/announce")
+def announce(uid: int, did: int, ip: str, port: int):
+    device_locations[(uid, did)] = (ip, port)
+    return {"status": "ok"}
+
+@app.get("/device_location")
+def device_location(uid: int, did: int):
+    if (uid, did) not in device_locations:
+        raise HTTPException(status_code=404, detail="Device not found")
+    return {"ip": device_locations[(uid, did)][0], "port": device_locations[(uid, did)][1]}
+
 @app.get("/config")
 def get_config():
     return {"p": P}
