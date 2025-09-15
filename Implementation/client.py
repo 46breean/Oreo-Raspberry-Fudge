@@ -1,10 +1,4 @@
-<<<<<<< HEAD
 import requests, sympy, random, math, hashlib, socket, sys, threading, time, subprocess
-=======
-import requests, random, math, socket, sys, threading, time
-from cryptography.hazmat.primitives.asymmetric import dsa
-from cryptography.hazmat.primitives import hashes
->>>>>>> 03c9849f9813d0dae80e172b18299ac7c13e9e0d
 from primePy import primes
 
 SERVER = "http://127.0.0.1:8000"
@@ -13,9 +7,9 @@ p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729)
 
 def hash_int(x: int) -> int:
-    m = hashes.Hash(hashes.SHA256())
+    m = hashlib.sha256()
     m.update(str(x).encode())
-    return int.from_bytes(m.finalize(), byteorder="big")
+    return int(m.hexdigest(), 16)
 
 def random_coprime(p_minus_1: int) -> int:
     while True:
@@ -74,7 +68,7 @@ def get_local_ip():
 
 
 def inbound_socket(UID, DID, DK, HOST, PORT):
-    factors = primes.divisors(DK)
+    factors = sympy.divisors(DK)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, PORT))
         s.listen()
@@ -105,7 +99,6 @@ def inbound_socket(UID, DID, DK, HOST, PORT):
                     with conn_back:
                         data_to_send = conn_back.recv(1024)
                         conn.sendall(data_to_send)
-
 
 
 def init_reg():
