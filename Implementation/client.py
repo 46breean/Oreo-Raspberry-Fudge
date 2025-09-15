@@ -1,4 +1,4 @@
-import requests, sympy, random, math, hashlib, socket, sys, threading, time
+import requests, sympy, random, math, hashlib, socket, sys, threading, time, subprocess
 from primePy import primes
 
 SERVER = "http://127.0.0.1:8000"
@@ -58,15 +58,14 @@ def keyDev():
     return base
 
 def get_local_ip():
-    """Get the LAN IP of this device."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        # doesn't have to be reachable
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
     finally:
         s.close()
     return ip
+
 
 def inbound_socket(UID, DID, DK, HOST, PORT):
     factors = sympy.divisors(DK)
@@ -78,39 +77,30 @@ def inbound_socket(UID, DID, DK, HOST, PORT):
         while True:
             conn, addr = s.accept()
             with conn:
-                print(f"[Device {DID}] Incoming registration request from {addr}")
                 newdev_msg = conn.recv(1024).decode()
                 if not newdev_msg:
                     continue
-                print("\nRegistration Request:", newdev_msg)
-                print("1. Accept Request")
-                print("2. Reject Request")
-                regreq_ans = int(input("Would you like to register this device? "))
 
-                if regreq_ans == 1:
-                    factor = random.choice(factors)
-                    try:
-                        register = requests.post(
-                            f"{SERVER}/register",
-                            json={"uid": UID, "did": DID, "factor": factor}
-                        )
-                        if register.status_code == 409:
-                            print("Factor invalid, retrying...")
-                            continue
-                        register.raise_for_status()
-                        register_data = register.json()
-                    except requests.exceptions.HTTPError as e:
-                        print(e.response.json()["detail"])
-                        continue
+                control_port = 50000 # won't work with multiple req at same time
 
-                    new_did = register_data["new_did"]
-                    new_dk = DK // factor
-                    data = f"{new_did},{new_dk}"
-                    conn.sendall(data.encode())
-                    print(f"Sent new DID/DK to new device: {data}")
+                subprocess.Popen([
+                    "start", "cmd", "/c",
+                    sys.executable, "registration.py",
+                    str(UID), str(DID), str(DK),
+                    str(addr), str(control_port),
+                    newdev_msg, str(factors),
+                    "&&", "pause"
+                ], shell=True)
 
-                elif regreq_ans == 2:
-                    print("Rejected registration request")
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ctrl:
+                    ctrl.bind(("127.0.0.1", control_port))
+                    ctrl.listen()
+                    conn_back, _ = ctrl.accept()
+                    with conn_back:
+                        data_to_send = conn_back.recv(1024)
+                        conn.sendall(data_to_send)
+
+
 
 def init_reg():
     print("\nSign Up:")
@@ -160,8 +150,12 @@ def init_reg():
             s.connect((referral_ip, referral_port))
             s.sendall(b"Registration Request")
             newdev_msg = s.recv(1024).decode()
-            DID, DK = newdev_msg.split(",")
-            DID, DK = int(DID), int(DK)
+            if newdev_msg == b"REJECTED":
+                print("Registration Request Rejected")
+                sys.exit()
+            else:
+                DID, DK = newdev_msg.split(",")
+                DID, DK = int(DID), int(DK)
 
         # announce self to server
         HOST = get_local_ip()
