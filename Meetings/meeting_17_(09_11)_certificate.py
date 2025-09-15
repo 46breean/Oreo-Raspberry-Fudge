@@ -15,7 +15,7 @@ class Device: #Working device
         signature = self.privateKey.sign(message, hashes.SHA256()) #Sign message
         server.deviceRevocation(self, message, signature)
 
-class badDevice: #Non-working device
+class Bad_Device: #Non-working device
 
     def __init__(self, server):
         self.DID = random.randint(1,100) #Generated as such for the purpose for testing
@@ -44,6 +44,6 @@ class Server:
 publicKeyDB = {}
 server = Server(publicKeyDB)
 goodDevice = Device(server)
-badDevice = badDevice(server)
+badDevice = Bad_Device(server)
 goodDevice.revokeDevice(server)
 badDevice.revokeDevice(server)
