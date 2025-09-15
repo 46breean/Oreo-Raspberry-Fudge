@@ -1,10 +1,12 @@
-import requests, primePy, random, math, socket, sys, threading, time
+import requests, random, math, socket, sys, threading, time
+from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives import hashes
+from primePy import primes
 
 SERVER = "http://127.0.0.1:8000"
 
 p = requests.get(f"{SERVER}/config").json()["p"]
-primeList = primePy.primes.upto(104729)
+primeList = primes.upto(104729)
 
 def hash_int(x: int) -> int:
     m = hashes.Hash(hashes.SHA256())
@@ -69,7 +71,7 @@ def get_local_ip():
     return ip
 
 def inbound_socket(UID, DID, DK, HOST, PORT):
-    factors = primePy.divisors(DK)
+    factors = primes.divisors(DK)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, PORT))
         s.listen()
