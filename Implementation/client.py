@@ -82,7 +82,7 @@ def inbound_socket(UID, DID, DK, HOST, PORT):
                     continue
 
                 control_port = 50000 # won't work with multiple req at same time
-                #theres def a btr way to send data across terminals on same device idk why i did this
+                #theres probs a btr way to send data across terminals on same device
 
                 subprocess.Popen([
                     "start", "cmd", "/c",
@@ -122,7 +122,7 @@ def init_reg():
         # start listener in background
         listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, DK, HOST, PORT), daemon=True)
         listener_thread.start()
-        time.sleep(0.5)  # give socket time to bind
+        time.sleep(0.5)
 
         return UID, DID, DK
 
