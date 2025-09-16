@@ -90,7 +90,6 @@ def inbound_socket(UID, DID, DK, HOST, PORT):
                     str(UID), str(DID), str(DK),
                     str(addr), str(control_port),
                     newdev_msg, str(factors),
-                    "&&", "pause"
                 ], shell=True)
 
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ctrl:
