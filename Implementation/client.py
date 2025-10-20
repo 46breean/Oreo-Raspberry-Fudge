@@ -1,10 +1,11 @@
-import requests, sympy, random, math, hashlib, socket, sys, threading, time, subprocess
+import requests, random, math, hashlib, socket, sys, threading, time, subprocess
 from primePy import primes
 
 SERVER = "http://127.0.0.1:8000"
 
 p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729)
+keyproduct = [random.choice(primeList) for _ in range (100)]
 
 def hash_int(x: int) -> int:
     m = hashlib.sha256()
@@ -17,45 +18,22 @@ def random_coprime(p_minus_1: int) -> int:
         if math.gcd(r, p_minus_1) == 1:
             return r
 
-def firstKeyDev():
-    pick = []
-    for i in range(100):
-        pick = pick.append(random.choice(primeList))
-    requirement = False
-    while requirement == False:
-        bitstring = [random.randint(0, 1) for n in range(100)]
-        if bitstring.count(1)>=50 and bitstring.count(1)<=70:
-            requirement = True
-    base = 1
-    unused = []
-    for i in range(100):
-        if bitstring[i] ==1:
-            base *= pick[i]
-        else:
-            unused.append(pick[i])
-    return base, unused
-
-def subkeyDev(pick):
-    requirement = False
-    while requirement == False:
-        bitstring = [random.randint(0, 1) for n in range(100)]
-        if bitstring.count(1)>=50 and bitstring.count(1)<=70:
-            requirement = True
-    base = 1
-    unused = []
-    for i in range(100):
-        if bitstring[i] ==1:
-            base *= pick[i]
-        else:
-            unused.append(pick[i])
-    return base, unused
-
 def keyDev():
+    requirement = False
+    while requirement == False:
+        bitstring = [random.randint(0, 1) for _ in range(100)]
+    if bitstring.count(1)>=50 and bitstring.count(1)<=70:
+      requirement = True
     base = 1
-    for i in range(5):
-        pick = random.choice(primeList)
-        base *= pick
-    return base
+    unused = 1
+
+    for i in range(100):
+        if bitstring[i] == 1:
+            base *= keyproduct[i]
+    else:
+      unused *= keyproduct[i]
+
+    return base, unused
 
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -68,7 +46,6 @@ def get_local_ip():
 
 
 def inbound_socket(UID, DID, DK, HOST, PORT):
-    factors = sympy.divisors(DK)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, PORT))
         s.listen()
@@ -89,7 +66,7 @@ def inbound_socket(UID, DID, DK, HOST, PORT):
                     sys.executable, "registration.py",
                     str(UID), str(DID), str(DK),
                     str(addr), str(control_port),
-                    newdev_msg, str(factors),
+                    newdev_msg, str(keyproduct),
                 ], shell=True)
 
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ctrl:
@@ -109,10 +86,10 @@ def init_reg():
 
     if choice == 1:
         name = input("Enter device name: ")
-        init = requests.post(f"{SERVER}/init", params={"name": name}).json()
-        UID, DID = init["UID"], init["DID"]
-        DK = keyDev()
+        DK, unused = keyDev()
         print("Initialised:", init)
+        init = requests.post(f"{SERVER}/init", params={"name": name, "unused": unused}).json()
+        UID, DID = init["UID"], init["DID"]
 
         # announce self to server
         HOST = get_local_ip()

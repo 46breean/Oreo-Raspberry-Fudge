@@ -5,6 +5,7 @@ from typing import Dict, Tuple, Optional
 import random
 
 userDataDB: Dict[Tuple[int, int], Optional[int]] = {}
+userConstantDB: Dict[Tuple[int, int], Optional[int]] = {}
 nameDB, indexDataDB, encDB = {}, {}, {}
 r2_store: Dict[Tuple[int, int], int] = {}
 
@@ -33,7 +34,7 @@ class InitResponse(BaseModel):
 class RegisterRequest(BaseModel):
     uid: int
     did: int
-    factor: int
+    unused: int
 
 class RegisterResponse(BaseModel):
     uid: int
@@ -82,10 +83,12 @@ def get_config():
     return {"p": P}
 
 @app.post("/init", response_model=InitResponse)
-def init_device(name: str = Query(...)):
+def init_device(unused: int, name: str = Query(...)):
+    constant = random.randint(1, 100000)
     UID = random.randint(10**9, 10**10 - 1)
     DID = random.randint(10**9, 10**10 - 1)
-    DSK = random.randint(1, 10**6)
+    DSK = unused*constant
+    userConstantDB[(UID, DID)] = constant
     userDataDB[(UID, DID)] = DSK
     nameDB[(UID, DID)] = name
     return {"UID": UID, "DID": DID, "name": name}
@@ -94,16 +97,17 @@ def init_device(name: str = Query(...)):
 @app.post("/register", response_model=RegisterResponse)
 def register_device(req: RegisterRequest):
     key = (req.uid, req.did)
-    DSK = userDataDB[key]
+    referral_DSK = userDataDB[key]
+    DSK_constant = userConstantDB[key]
     if key not in userDataDB:
         raise HTTPException(status_code=400, detail="Current device not registered")
-    if DSK is None:
+    if referral_DSK is None:
         raise HTTPException(status_code=403, detail="Current device has been revoked")
     
-    existing_dsks = [dsk for (u, d), dsk in userDataDB.items() if u == req.uid] # current code doesn't check if dsk clashes, will fix in
-    new_dsk = DSK * req.factor
+    existing_dsks = [dsk for (u, d), dsk in userDataDB.items() if u == req.uid]
+    new_dsk = DSK_constant * req.unused
     if new_dsk in existing_dsks:
-        raise HTTPException(status_code=409, detail="Factor generated is invalid")
+        raise HTTPException(status_code=409, detail="DK generated is invalid")
 
 
     existing_dids = [d for (u, d), _ in userDataDB.items() if u == req.uid]
@@ -157,6 +161,7 @@ def eval_step1(req: EvalStep1Request):
     r2_store[key] = r2
 
     blinded2 = pow(req.blinded, DSK * r2, P)
+    
     return {"blinded2": blinded2}
 
 @app.post("/eval/step2", response_model=EvalStep2Response)
