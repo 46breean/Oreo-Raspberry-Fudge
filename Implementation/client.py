@@ -1,4 +1,4 @@
-import requests, random, math, hashlib, socket, sys, threading, time, subprocess
+import requests, random, math, hashlib, socket, sys, threading, time, subprocess, tempfile, os, json
 from primePy import primes
 
 SERVER = "http://127.0.0.1:8000"
@@ -22,16 +22,16 @@ def keyDev():
     requirement = False
     while requirement == False:
         bitstring = [random.randint(0, 1) for _ in range(100)]
-    if bitstring.count(1)>=50 and bitstring.count(1)<=70:
-      requirement = True
+        if bitstring.count(1)>=50 and bitstring.count(1)<=70:
+            requirement = True
     base = 1
     unused = 1
 
     for i in range(100):
         if bitstring[i] == 1:
             base *= keyproduct[i]
-    else:
-      unused *= keyproduct[i]
+        else:
+            unused *= keyproduct[i]
 
     return base, unused
 
@@ -58,25 +58,30 @@ def inbound_socket(UID, DID, DK, HOST, PORT):
                 if not newdev_msg:
                     continue
 
-                control_port = 50000 # won't work with multiple req at same time
-                #theres probs a btr way to send data across terminals on same device
+                control_port = 50000
+
+                tmp = tempfile.NamedTemporaryFile(delete=False)
+                tmp_path = tmp.name
+                tmp.close()
 
                 subprocess.Popen([
                     "start", "cmd", "/c",
                     sys.executable, "registration.py",
-                    str(UID), str(DID), str(DK),
+                    str(UID), str(DID),
                     str(addr), str(control_port),
-                    newdev_msg, str(keyproduct),
+                    newdev_msg,
+                    str(keyproduct), str(tmp_path)
                 ], shell=True)
 
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ctrl:
-                    ctrl.bind(("127.0.0.1", control_port))
-                    ctrl.listen()
-                    conn_back, _ = ctrl.accept()
-                    with conn_back:
-                        data_to_send = conn_back.recv(1024)
-                        conn.sendall(data_to_send)
+                while not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+                    time.sleep(0.2)
 
+                with open(tmp_path, "r") as f:
+                    data_to_send = f.read()
+
+                os.remove(tmp_path)
+                
+                conn.sendall(data_to_send.encode())
 
 def init_reg():
     print("\nSign Up:")
@@ -87,9 +92,9 @@ def init_reg():
     if choice == 1:
         name = input("Enter device name: ")
         DK, unused = keyDev()
-        print("Initialised:", init)
         init = requests.post(f"{SERVER}/init", params={"name": name, "unused": unused}).json()
         UID, DID = init["UID"], init["DID"]
+        print("Initialised:", init)
 
         # announce self to server
         HOST = get_local_ip()
@@ -118,7 +123,7 @@ def init_reg():
             referral_port = referral_info["port"]
         except requests.exceptions.HTTPError as e:
             print("Could not find referral device:", e.response.json()["detail"])
-            return
+            sys.exit(1)
 
         # connect to referral device
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -130,14 +135,14 @@ def init_reg():
                 print("Registration Request Rejected")
                 sys.exit()
             else:
-                DID, DK = newdev_msg.split(",")
+                DID, DK = json.loads(newdev_msg)
                 DID, DK = int(DID), int(DK)
 
         # announce self to server
         HOST = get_local_ip()
         PORT = 49154
         requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT})
-        print(f"New device registered: (UID={UID}, DID={DID}, DK={DK})")
+        print(f"New device registered: (UID={UID}, DID={DID})")
 
         # start listener
         listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, DK, HOST, PORT), daemon=True)

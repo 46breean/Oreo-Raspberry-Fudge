@@ -1,13 +1,13 @@
-import sys, random, requests, socket, ast
+import sys, random, requests, ast, json
 
 SERVER = "http://127.0.0.1:8000"
 
-def keyDev():
+def keyDev(keyproduct):
     requirement = False
     while requirement == False:
         bitstring = [random.randint(0, 1) for n in range(100)]
-    if bitstring.count(1)>=50 and bitstring.count(1)<=70:
-      requirement = True
+        if bitstring.count(1)>=50 and bitstring.count(1)<=70:
+            requirement = True
     base = 1
     unused = 1
 
@@ -19,7 +19,7 @@ def keyDev():
 
     return base, unused
 
-def handle_registration(UID, DID, DK, newdev_ms, factors, control_port, addr):
+def handle_registration(UID, DID, newdev_ms, keyproduct, control_port, addr, tmp_path):
     print(f"[Device {DID}] Incoming registration request from {addr}")
     print("\nRegistration Request:", newdev_ms)
     print("1. Accept Request")
@@ -28,40 +28,42 @@ def handle_registration(UID, DID, DK, newdev_ms, factors, control_port, addr):
     regreq_ans = int(input("Would you like to register this device? "))
 
     if regreq_ans == 1:
-        new_dk, unused = keyDev()
-        try:
+        while True:
+            new_dk, unused = keyDev(keyproduct)
             register = requests.post(
-                f"{SERVER}/register", 
-                params ={"uid": UID, "did": DID, "unused": unused}).json()
+                f"{SERVER}/register",
+                json={"uid": UID, "did": DID, "unused": unused}
+            )
+
             if register.status_code == 409:
                 print("DK invalid, retrying...")
-                return
-            register.raise_for_status()
-            register_data = register.json()
-        except requests.exceptions.HTTPError as e:
-            print(e.response.json()["detail"])
-            return
+                continue
+
+            try:
+                register.raise_for_status()
+                register_data = register.json()
+                break
+            except requests.exceptions.HTTPError as e:
+                print("Registration failed:", e.response.json()["detail"])
+                return    
         
         new_did = register_data["new_did"]
         
-        data = f"{new_did},{new_dk}"
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect(("127.0.0.1", control_port))
-            s.sendall(data.encode())
+        data = [new_did, new_dk]
 
     elif regreq_ans == 2:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect(("127.0.0.1", control_port))
-            s.sendall(b"REJECTED")
+        data = b"REJECTED"
+
+    with open(tmp_path, "w") as f:
+        json.dump(data, f)
 
     input("\nPress Enter to continue...")
 
 
-UID, DID, DK, addr, control_port, newdev_ms, factors = sys.argv[1:]
+UID, DID, addr, control_port, newdev_ms, keyproduct, tmp_path = sys.argv[1:]
 UID = int(UID)
 DID = int(DID)
-DK = int(DK)
 control_port = int(control_port)
-keyproduct = ast.literal_eval(factors)
+keyproduct = ast.literal_eval(keyproduct)
 
-handle_registration(UID, DID, DK, newdev_ms, factors, control_port, addr)
+handle_registration(UID, DID, newdev_ms, keyproduct, control_port, addr, tmp_path)

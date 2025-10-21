@@ -93,7 +93,6 @@ def init_device(unused: int, name: str = Query(...)):
     nameDB[(UID, DID)] = name
     return {"UID": UID, "DID": DID, "name": name}
 
-
 @app.post("/register", response_model=RegisterResponse)
 def register_device(req: RegisterRequest):
     key = (req.uid, req.did)
