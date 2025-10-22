@@ -3,10 +3,6 @@ from primePy import primes
 
 SERVER = "http://127.0.0.1:8000"
 
-p = requests.get(f"{SERVER}/config").json()["p"]
-primeList = primes.upto(104729)
-keyproduct = [random.choice(primeList) for _ in range (100)]
-
 def hash_int(x: int) -> int:
     m = hashlib.sha256()
     m.update(str(x).encode())
@@ -19,6 +15,9 @@ def random_coprime(p_minus_1: int) -> int:
             return r
 
 def keyDev():
+
+    keyproduct = [random.choice(primeList) for _ in range (100)]
+
     requirement = False
     while requirement == False:
         bitstring = [random.randint(0, 1) for _ in range(100)]
@@ -33,7 +32,7 @@ def keyDev():
         else:
             unused *= keyproduct[i]
 
-    return base, unused
+    return base, unused, keyproduct
 
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -45,7 +44,7 @@ def get_local_ip():
     return ip
 
 
-def inbound_socket(UID, DID, DK, HOST, PORT):
+def inbound_socket(UID, DID, keyproduct, HOST, PORT):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, PORT))
         s.listen()
@@ -58,8 +57,6 @@ def inbound_socket(UID, DID, DK, HOST, PORT):
                 if not newdev_msg:
                     continue
 
-                control_port = 50000
-
                 tmp = tempfile.NamedTemporaryFile(delete=False)
                 tmp_path = tmp.name
                 tmp.close()
@@ -68,7 +65,7 @@ def inbound_socket(UID, DID, DK, HOST, PORT):
                     "start", "cmd", "/c",
                     sys.executable, "registration.py",
                     str(UID), str(DID),
-                    str(addr), str(control_port),
+                    str(addr),
                     newdev_msg,
                     str(keyproduct), str(tmp_path)
                 ], shell=True)
@@ -91,7 +88,7 @@ def init_reg():
 
     if choice == 1:
         name = input("Enter device name: ")
-        DK, unused = keyDev()
+        DK, unused, keyproduct = keyDev()
         init = requests.post(f"{SERVER}/init", params={"name": name, "unused": unused}).json()
         UID, DID = init["UID"], init["DID"]
         print("Initialised:", init)
@@ -102,7 +99,7 @@ def init_reg():
         requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT})
 
         # start listener in background
-        listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, DK, HOST, PORT), daemon=True)
+        listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyproduct, HOST, PORT), daemon=True)
         listener_thread.start()
         time.sleep(0.5)
 
@@ -135,13 +132,13 @@ def init_reg():
                 print("Registration Request Rejected")
                 sys.exit()
             else:
-                DID, DK = json.loads(newdev_msg)
-                DID, DK = int(DID), int(DK)
+                DID, DK, unused = json.loads(newdev_msg)
+                DID, DK, unused = int(DID), int(DK), int(unused)
 
         # announce self to server
         HOST = get_local_ip()
         PORT = 49154
-        requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT})
+        requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT, "unused": unused})
         print(f"New device registered: (UID={UID}, DID={DID})")
 
         # start listener
@@ -214,6 +211,9 @@ def fn_selection(UID, DID, DK):
             break
         else:
             print("Invalid choice.")
+
+p = requests.get(f"{SERVER}/config").json()["p"]
+primeList = primes.upto(104729)
 
 UID, DID, DK = init_reg()
 fn_selection(UID, DID, DK)

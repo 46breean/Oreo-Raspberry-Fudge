@@ -5,7 +5,7 @@ SERVER = "http://127.0.0.1:8000"
 def keyDev(keyproduct):
     requirement = False
     while requirement == False:
-        bitstring = [random.randint(0, 1) for n in range(100)]
+        bitstring = [random.randint(0, 1) for _ in range(100)]
         if bitstring.count(1)>=50 and bitstring.count(1)<=70:
             requirement = True
     base = 1
@@ -14,12 +14,12 @@ def keyDev(keyproduct):
     for i in range(100):
         if bitstring[i] == 1:
             base *= keyproduct[i]
-    else:
-      unused *= keyproduct[i]
+        else:
+            unused *= keyproduct[i]
 
     return base, unused
 
-def handle_registration(UID, DID, newdev_ms, keyproduct, control_port, addr, tmp_path):
+def handle_registration(UID, DID, newdev_ms, keyproduct, addr, tmp_path):
     print(f"[Device {DID}] Incoming registration request from {addr}")
     print("\nRegistration Request:", newdev_ms)
     print("1. Accept Request")
@@ -49,7 +49,7 @@ def handle_registration(UID, DID, newdev_ms, keyproduct, control_port, addr, tmp
         
         new_did = register_data["new_did"]
         
-        data = [new_did, new_dk]
+        data = [new_did, new_dk, unused]
 
     elif regreq_ans == 2:
         data = b"REJECTED"
@@ -60,10 +60,9 @@ def handle_registration(UID, DID, newdev_ms, keyproduct, control_port, addr, tmp
     input("\nPress Enter to continue...")
 
 
-UID, DID, addr, control_port, newdev_ms, keyproduct, tmp_path = sys.argv[1:]
+UID, DID, addr, newdev_ms, keyproduct, tmp_path = sys.argv[1:]
 UID = int(UID)
 DID = int(DID)
-control_port = int(control_port)
 keyproduct = ast.literal_eval(keyproduct)
 
-handle_registration(UID, DID, newdev_ms, keyproduct, control_port, addr, tmp_path)
+handle_registration(UID, DID, newdev_ms, keyproduct, addr, tmp_path)
