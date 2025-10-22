@@ -44,10 +44,17 @@ def get_local_ip():
     return ip
 
 
-def inbound_socket(UID, DID, keyproduct, HOST, PORT):
+def inbound_socket(UID, DID, keyproduct):
+
+    HOST = get_local_ip()
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, PORT))
+        s.bind((HOST, 0))
         s.listen()
+
+        PORT = s.getsockname()[-1]
+        requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT})
+
         print(f"[Device {DID}] Listener started on {HOST}:{PORT}...")
 
         while True:
@@ -93,13 +100,8 @@ def init_reg():
         UID, DID = init["UID"], init["DID"]
         print("Initialised:", init)
 
-        # announce self to server
-        HOST = get_local_ip()
-        PORT = 49153
-        requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT})
-
         # start listener in background
-        listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyproduct, HOST, PORT), daemon=True)
+        listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyproduct), daemon=True)
         listener_thread.start()
         time.sleep(0.5)
 
@@ -135,19 +137,12 @@ def init_reg():
                 DID, DK, unused = json.loads(newdev_msg)
                 DID, DK, unused = int(DID), int(DK), int(unused)
 
-        # announce self to server
-        HOST = get_local_ip()
-        PORT = 49154
-        requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT, "unused": unused})
-        print(f"New device registered: (UID={UID}, DID={DID})")
-
         # start listener
-        listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, DK, HOST, PORT), daemon=True)
+        listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, DK), daemon=True)
         listener_thread.start()
         time.sleep(0.5)
 
         return UID, DID, DK
-
 
 def fn_selection(UID, DID, DK):
 
