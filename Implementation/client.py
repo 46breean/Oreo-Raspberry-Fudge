@@ -69,7 +69,7 @@ def inbound_socket(UID, DID, keyproduct):
                 tmp.close()
 
                 subprocess.Popen([
-                    "start", "cmd", "/c",
+                    "start", "cmd", "/k",
                     sys.executable, "registration.py",
                     str(UID), str(DID),
                     str(addr),
@@ -81,10 +81,14 @@ def inbound_socket(UID, DID, keyproduct):
                     time.sleep(0.2)
 
                 with open(tmp_path, "r") as f:
-                    data_to_send = f.read()
+                    data = json.load(f)
 
                 os.remove(tmp_path)
-                
+
+                data = {"DID": data[0], "DK": data[1], "unused": data[2]}
+                data["keyproduct"] = keyproduct
+                data_to_send = json.dumps(data)
+
                 conn.sendall(data_to_send.encode())
 
 def init_reg():
@@ -108,13 +112,13 @@ def init_reg():
         return UID, DID, DK
 
     elif choice == 2:
-        UID = input("Enter your UID: ")
+        uid = input("Enter your UID: ")
         referral_did = input("Enter the DID of your referral device: ")
 
         try:
             loc = requests.get(
                 f"{SERVER}/device_location",
-                params={"uid": UID, "did": referral_did}
+                params={"uid": uid, "did": referral_did}
             )
             loc.raise_for_status()
             referral_info = loc.json()
@@ -129,20 +133,26 @@ def init_reg():
             print(f"Connecting to referral device at {referral_ip}:{referral_port}...")
             s.connect((referral_ip, referral_port))
             s.sendall(b"Registration Request")
-            newdev_msg = s.recv(1024).decode()
+            newdev_msg = s.recv(4096).decode()
             if newdev_msg == b"REJECTED":
                 print("Registration Request Rejected")
                 sys.exit()
             else:
-                DID, DK, unused = json.loads(newdev_msg)
-                DID, DK, unused = int(DID), int(DK), int(unused)
+                data = json.loads(newdev_msg)
+                did, dk, unused, keyproduct = (
+                    data["DID"],
+                    data["DK"],
+                    data["unused"],
+                    data["keyproduct"]
+                )
+                did, dk, unused, keyproduct = int(did), int(dk), int(unused), list(keyproduct)
 
         # start listener
-        listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, DK), daemon=True)
+        listener_thread = threading.Thread(target=inbound_socket, args=(uid, did, keyproduct), daemon=True)
         listener_thread.start()
         time.sleep(0.5)
 
-        return UID, DID, DK
+        return uid, did, dk
 
 def fn_selection(UID, DID, DK):
 

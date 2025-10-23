@@ -96,10 +96,12 @@ def init_device(unused: int, name: str = Query(...)):
 @app.post("/register", response_model=RegisterResponse)
 def register_device(req: RegisterRequest):
     key = (req.uid, req.did)
-    referral_DSK = userDataDB[key]
-    DSK_constant = userConstantDB[key]
+
     if key not in userDataDB:
         raise HTTPException(status_code=400, detail="Current device not registered")
+
+    referral_DSK = userDataDB[key]
+    DSK_constant = userConstantDB[key]
     if referral_DSK is None:
         raise HTTPException(status_code=403, detail="Current device has been revoked")
     
@@ -116,6 +118,8 @@ def register_device(req: RegisterRequest):
             break
 
     userDataDB[(req.uid, new_did)] = new_dsk
+    userConstantDB[req.uid, new_did] = DSK_constant
+
     return {"uid": req.uid, "new_did": new_did}
 
 @app.get("/revoke_list", response_model=RevokeListResponse)

@@ -28,6 +28,7 @@ def handle_registration(UID, DID, newdev_ms, keyproduct, addr, tmp_path):
     regreq_ans = int(input("Would you like to register this device? "))
 
     if regreq_ans == 1:
+
         while True:
             new_dk, unused = keyDev(keyproduct)
             register = requests.post(
@@ -44,9 +45,15 @@ def handle_registration(UID, DID, newdev_ms, keyproduct, addr, tmp_path):
                 register_data = register.json()
                 break
             except requests.exceptions.HTTPError as e:
-                print("Registration failed:", e.response.json()["detail"])
-                return    
-        
+                try:
+                    # Try to extract JSON error detail
+                    err_detail = e.response.json().get("detail", str(e))
+                except ValueError:
+                    # If response is not JSON
+                    err_detail = e.response.text or str(e)
+                print("Registration failed:", err_detail)
+                continue  # try again or break depending on your logic
+
         new_did = register_data["new_did"]
         
         data = [new_did, new_dk, unused]
