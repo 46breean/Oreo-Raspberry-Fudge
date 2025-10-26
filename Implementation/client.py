@@ -1,7 +1,7 @@
 import requests, random, math, hashlib, socket, sys, threading, time, subprocess, tempfile, os, json
 from primePy import primes
 
-SERVER = "http://192.168.68.65"
+SERVER = "http://192.168.68.65:8000"
 
 def hash_int(x: int) -> int:
     m = hashlib.sha256()
