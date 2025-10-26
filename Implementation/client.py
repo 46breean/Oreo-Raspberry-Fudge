@@ -1,7 +1,7 @@
-import requests, random, math, hashlib, socket, sys, threading, time, subprocess, tempfile, os, json
+import requests, random, math, hashlib, socket, sys, threading, time, subprocess, tempfile, os, json, ast
 from primePy import primes
 
-SERVER = "http://127.0.0.1:8000"
+SERVER = "http://192.168.68.65:8000"
 
 def hash_int(x: int) -> int:
     m = hashlib.sha256()
@@ -170,8 +170,9 @@ def fn_selection(UID, DID, DK):
     while True:
         print("\nDevice Menu:")
         print("1. Revoke device")
-        print("2. Evaluate")
-        print("3. Exit")
+        print("2. Evaluate and Query")
+        print("3. Edit Database")
+        print("4. Exit")
         choice = int(input("Select function: "))
 
         if choice == 1:
@@ -194,8 +195,9 @@ def fn_selection(UID, DID, DK):
                 json={"uid": UID, "did": DID, "revoke_did": revoke_did}
             ).json()
             print(revoke)
+        
         elif choice == 2:
-            index = int(input("Enter a number to evaluate: "))
+            index = int(input("Enter a student data query: "))
             hashed_index = hash_int(index) % p
             r1 = random_coprime(p - 1)
 
@@ -220,11 +222,66 @@ def fn_selection(UID, DID, DK):
             r1_inv = pow(r1, -1, p - 1)
             unblinded1 = pow(blinded2, r1_inv, p)
 
-            resp2 = requests.post(f"{SERVER}/eval/step2", json={"uid": UID, "did": DID, "unblinded1": unblinded1}).json()
-            print("Encrypted Index:", resp2["final"])
+            try:
+                resp2 = requests.post(f"{SERVER}/eval/step2", json={"uid": UID, "did": DID, "unblinded1": unblinded1}).json()
+                print("Student Data: ", resp2["Query Result"])
+            except requests.exceptions.HTTPError as e:
+                print("Step 2 failed:", e.response.json()["detail"])
+                input("Press Enter to continue...")
+                return
+        
         elif choice == 3:
+            dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
+            SData = ast.literal_eval(input("Enter student data in the format {DataID1:'Student Data 1', DataID2:'Student Data 2'}. Input '0' for DataID if inputting new data: "))
+            try:
+                resp1 = requests.post(f"{SERVER}/edit/step1", json={"dataEntryType": dataEntryType, "SData": SData}).json
+                print("Student database successfully edited ")
+                if dataEntryType == 1: # if new student data is added
+                    print("with the following new DataIDs: ", resp1["DataIDList"])
+            except requests.exceptions.HTTPError as e:
+                print("Step 1 failed:", e.response.json()["detail"])
+                input("Press Enter to continue...")
+                return
+
+
+            index = int(input("Enter an index to edit: "))
+            hashed_index = hash_int(index) % p
+            r1 = random_coprime(p - 1)
+
+            blinded = pow(hashed_index, DK * r1, p)
+
+            try:
+                resp2 = requests.post(
+                    f"{SERVER}/edit/step2",
+                    json={"uid": UID, "did": DID, "blinded": blinded}
+                )
+                resp2.raise_for_status()
+                blinded2 = resp2.json()["blinded2"]
+            except requests.exceptions.HTTPError as e:
+                print("Step 2 failed:", e.response.json()["detail"])
+                input("Press Enter to continue...")
+                return
+            except KeyError:
+                print("Unexpected response from server:", resp2.json())
+                input("Press Enter to continue...")
+                return
+
+            r1_inv = pow(r1, -1, p - 1)
+            unblinded1 = pow(blinded2, r1_inv, p)
+            addOrRemove = int(input("Would you like to (1) add or (2) remove Data ID(s) from the index: "))
+            DataID = list(input("Input the list of DataID that is to be added or removed in the format ['', '', '', ...]: "))
+            try:
+                resp3 = requests.post(f"{SERVER}/eval/step3", json={"uid": UID, "did": DID, "unblinded1": unblinded1, "addOrRemove": addOrRemove, "DataID": DataID}).json()
+                print("Index edit ", resp3["result"])
+            except requests.exceptions.HTTPError as e:
+                print("Step 3 failed:", e.response.json()["detail"])
+                input("Press Enter to continue...")
+                return
+
+        elif choice == 4:
             print("Goodbye!")
             break
+        
         else:
                 print("Invalid choice.")
 
