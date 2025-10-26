@@ -6,7 +6,7 @@ import random
 
 userDataDB: Dict[Tuple[int, int], Optional[int]] = {}
 userConstantDB: Dict[Tuple[int, int], Optional[int]] = {}
-nameDB, indexDataDB, encDB = {}, {}, {}
+nameDB, indexDataDB, studentDataDB = {}, {}, {}
 r2_store: Dict[Tuple[int, int], int] = {}
 
 # prime modulus
@@ -62,7 +62,32 @@ class EvalStep2Request(BaseModel):
     unblinded1: int
 
 class EvalStep2Response(BaseModel):
-    final: int
+    query_result: dict
+
+class EditStep1Request(BaseModel):
+    dataEntryType: int
+    SData: dict
+
+class EditStep1Response(BaseModel):
+    dataIDList: list
+
+class EditStep2Request(BaseModel):
+    uid: int
+    did: int
+    blinded: int
+
+class EditStep2Response(BaseModel):
+    blinded2: int
+
+class EditStep3Request(BaseModel):
+    uid: int
+    did: int
+    unblinded1: int
+    addOrRemove: int
+    DataID: list
+
+class EditStep3Response(BaseModel):
+    result: str
 
 # endpoints
 device_locations = {}  # (uid, did) -> (ip, port)
@@ -134,7 +159,6 @@ def revoke_list(uid: int = Query(...), did: int = Query(...)):
     return {"dids": dids}
 
 @app.post("/revoke")
-
 def revoke(req: RevokeRequest):
 
     current = (req.uid, req.did)
@@ -176,4 +200,78 @@ def eval_step2(req: EvalStep2Request):
 
     r2_inv = pow(r2, -1, P - 1)
     final_value = pow(req.unblinded1, r2_inv, P)
-    return {"final": final_value}
+
+    if final_value not in indexDataDB:
+        raise HTTPException(status_code=400, detail="Encrypted Index not found in this server.")
+    
+    DataID = indexDataDB[final_value]
+    query_result = {}
+    for ID in DataID:
+        SData = studentDataDB[ID]
+        query_result[DataID] = SData
+
+    if DataID is None or DataID not in studentDataDB or SData is None:
+        raise HTTPException(status_code=400,detail="No associated student data found.")
+
+    return {"Query Result": query_result}
+    
+@app.post("/edit/step1", response_model=EditStep1Response)
+def edit_step1(req: EditStep1Request):
+    DataIDList = []
+    
+    for DataID,Data in req.SData.items():
+        if req.dataEntryType == 1:
+            DataID = random.randint(10**9, 10**10 - 1)
+            req.SData[DataID] = Data
+            DataIDList.append(DataID)
+
+        elif req.dataEntryType == 2:
+            if DataID not in studentDataDB:
+                raise HTTPException(status_code=400,detail="One or more DataID is not found in the student database. Upload new data and edit existing data separately.")
+    
+        studentDataDB[DataID] = Data
+
+    return {"DataIDList": DataIDList}
+
+@app.post("/edit/step2", response_model=EditStep2Response)
+def edit_step2(req: EditStep2Request):
+    key = (req.uid, req.did)
+    DSK = userDataDB[key]    
+    if key not in userDataDB:
+        raise HTTPException(status_code=400, detail="Current device not registered")
+    elif userDataDB[key] is None:
+        raise HTTPException(status_code=403, detail="Current device has been revoked")
+
+    r2 = random_coprime(P - 1)
+    r2_store[key] = r2
+
+    blinded2 = pow(req.blinded, DSK * r2, P)
+    
+    return {"blinded2": blinded2}
+
+@app.post("/edit/step3", response_model=EditStep3Response)
+def edit_step3(req: EditStep3Request):
+    key = (req.uid, req.did)
+    if key not in r2_store:
+        raise HTTPException(status_code=400, detail="No pending evaluation for this device")
+    r2 = r2_store.pop(key)
+
+    r2_inv = pow(r2, -1, P - 1)
+    final_value = pow(req.unblinded1, r2_inv, P)
+
+    if final_value in indexDataDB:
+        for ID in req.DataID:
+            if req.addOrRemove == 1:
+                indexDataDB[final_value].append(ID)
+            else:
+                if ID not in indexDataDB:
+                    raise HTTPException(status_code=400, detail="DataID not found in index database.")
+                indexDataDB[final_value].remove(ID)
+    else:
+        if req.addOrRemove == 1:
+            indexDataDB[final_value] = req.DataID
+        else:
+            raise HTTPException(status_code=400, detail="You cannot remove data IDs from a non-existent index.")
+
+    result = "successful"
+    return{"result": result}
