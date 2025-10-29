@@ -28,9 +28,9 @@ class User: #school
         self.schoolCert = self.schoolKey.public_key()
         server.userRegistration(self)
 
-    def generateDeviceCert(self, Device):
+    def generateDeviceCert(self, device):
         f = self.schoolKey
-        return f.encrypt(Device.unsignedCert)
+        return f.encrypt(device.unsignedCert)
 
 class Device: #teacher
 
@@ -38,7 +38,7 @@ class Device: #teacher
         self.DID = random.randint(1,100) #Generated as such for the purpose for testing
         self.deviceKey = dsa.generate_private_key(key_size=2048)
         self.unsignedCert = self.deviceKey.public_key()
-        self.deviceCert = school.generateDeviceCert(Device=self)
+        self.deviceCert = school.generateDeviceCert(self)
 
     def revokeDevice(self,server):
         message = self.deviceKey.encrypt("Retrieve DIDs")
@@ -48,7 +48,7 @@ class Device: #teacher
 schoolCertDB = {}
 server = Server(schoolCertDB)
 
-choice = int(input("1 to register a new device, 2 to revoke a device, 3 to exit"))
+choice = int(input("1 to register a new device, 2 to revoke a device, 3 to exit: "))
 if choice == 1:
         deviceName = input("Device name:")
         school = User(server)
