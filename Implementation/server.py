@@ -222,7 +222,7 @@ def edit_step1(req: EditStep1Request):
     for DataID,Data in req.SData.items():
         if req.dataEntryType == 1:
             DataID = random.randint(10**7, 10**8 - 1)
-            req.SData[DataID] = Data
+            req.SData[DataID] = Data #cannot edit dictionary while iterating, error here
             DataIDList.append(DataID)
 
         elif req.dataEntryType == 2:

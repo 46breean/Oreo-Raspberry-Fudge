@@ -1,7 +1,7 @@
 import requests, random, math, hashlib, socket, sys, threading, time, subprocess, tempfile, os, json, ast
 from primePy import primes
 
-SERVER = "http://172.20.10.2:8000"
+SERVER = "http://172.20.10.4:8000"
 
 def hash_int(x: int) -> int:
     m = hashlib.sha256()
@@ -209,11 +209,12 @@ def fn_selection(UID, DID, DK):
                     json={"uid": UID, "did": DID, "blinded": blinded}
                 )
                 resp1.raise_for_status()
-                blinded2 = resp1.json()["blinded2"]
             except requests.exceptions.HTTPError as e:
                 print("Step 1 failed:", e.response.json()["detail"])
                 input("Press Enter to continue...")
                 return
+            try:
+                blinded2 = resp1.json()["blinded2"]
             except KeyError:
                 print("Unexpected response from server:", resp1.json())
                 input("Press Enter to continue...")
@@ -234,14 +235,17 @@ def fn_selection(UID, DID, DK):
             dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
             SData = ast.literal_eval(input("Enter student data in the format {DataID1:'Student Data 1', DataID2:'Student Data 2'}. Input any integer for DataID if inputting new data: "))
             try:
-                resp1 = requests.post(f"{SERVER}/edit/step1", json={"dataEntryType": dataEntryType, "SData": SData}).json
-                print("Student database successfully edited ")
-                if dataEntryType == 1: # if new student data is added
-                    print("with the following new DataIDs: ", resp1["DataIDList"])
+                resp1 = requests.post(f"{SERVER}/edit/step1", json={"dataEntryType": dataEntryType, "SData": SData})
+                resp1 = resp1.json()
+                
             except requests.exceptions.HTTPError as e:
                 print("Step 1 failed:", e.response.json()["detail"])
                 input("Press Enter to continue...")
                 return
+            print("Student database successfully edited ")
+            if dataEntryType == 1: # if new student data is added
+                print("with the following new DataIDs: ", resp1["DataIDList"])
+            
 
             print("===== Encrypted Index Database Editing =====")
             index = int(input("Enter an index to add or edit: "))
