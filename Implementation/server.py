@@ -1,8 +1,7 @@
+import random, math, os
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-import random, math
 from typing import Dict, Tuple, Optional
-import random
 
 userDataDB: Dict[Tuple[int, int], Optional[int]] = {}
 userConstantDB: Dict[Tuple[int, int], Optional[int]] = {}
@@ -69,7 +68,7 @@ class EditStep1Request(BaseModel):
     SData: dict
 
 class EditStep1Response(BaseModel):
-    dataIDList: list
+    newDataIDList: list
 
 class EditStep2Request(BaseModel):
     uid: int
@@ -206,32 +205,34 @@ def eval_step2(req: EvalStep2Request):
     
     DataID = indexDataDB[final_value]
     query_result = {}
+    
     for ID in DataID:
-        SData = studentDataDB[ID]
-        query_result[DataID] = SData
+        intID = int(ID)
+        if intID not in studentDataDB:
+            raise HTTPException(status_code=400,detail="No student found.")
+        SData = studentDataDB[intID]
+        if SData is None:
+            raise HTTPException(status_code=400,detail="No associated student data found.")
+        query_result[intID] = SData
 
-    if DataID is None or DataID not in studentDataDB or SData is None:
-        raise HTTPException(status_code=400,detail="No associated student data found.")
-
-    return {"Query Result": query_result}
+    return {"query_result": query_result}
     
 @app.post("/edit/step1", response_model=EditStep1Response)
 def edit_step1(req: EditStep1Request):
-    DataIDList = []
-    
+    newDataIDList = []
+    global studentDataDB
+
     for DataID,Data in req.SData.items():
         if req.dataEntryType == 1:
             DataID = random.randint(10**7, 10**8 - 1)
-            req.SData[DataID] = Data #cannot edit dictionary while iterating, error here
-            DataIDList.append(DataID)
-
+            newDataIDList.append(DataID)
         elif req.dataEntryType == 2:
             if DataID not in studentDataDB:
                 raise HTTPException(status_code=400,detail="One or more DataID is not found in the student database. Upload new data and edit existing data separately.")
-    
+
         studentDataDB[DataID] = Data
 
-    return {"DataIDList": DataIDList}
+    return {"newDataIDList": newDataIDList}
 
 @app.post("/edit/step2", response_model=EditStep2Response)
 def edit_step2(req: EditStep2Request):
@@ -269,7 +270,7 @@ def edit_step3(req: EditStep3Request):
                 indexDataDB[final_value].remove(ID)
     else:
         if req.addOrRemove == 1:
-            indexDataDB[final_value] = req.DataID
+            indexDataDB[final_value] = list(req.DataID)
         else:
             raise HTTPException(status_code=400, detail="You cannot remove data IDs from a non-existent index.")
 
