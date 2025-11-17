@@ -123,9 +123,12 @@ def register_device(req: RegisterRequest):
         raise HTTPException(status_code=400, detail="Current device not registered")
 
     referral_DSK = userDataDB[key]
-    DSK_constant = userConstantDB[key]
     if referral_DSK is None:
         raise HTTPException(status_code=403, detail="Current device has been revoked")
+    
+    DSK_constant = userConstantDB[key]
+    if DSK_constant is None:
+        raise HTTPException(status_code=400, detail="Current device not registered.")
     
     existing_dsks = [dsk for (u, d), dsk in userDataDB.items() if u == req.uid]
     new_dsk = DSK_constant * req.unused
@@ -175,10 +178,11 @@ def revoke(req: RevokeRequest):
 @app.post("/eval/step1", response_model=EvalStep1Response)
 def eval_step1(req: EvalStep1Request):
     key = (req.uid, req.did)
-    DSK = userDataDB[key]    
     if key not in userDataDB:
         raise HTTPException(status_code=400, detail="Current device not registered")
-    elif userDataDB[key] is None:
+    
+    DSK = userDataDB[key]
+    if DSK is None:
         raise HTTPException(status_code=403, detail="Current device has been revoked")
 
     r2 = random_coprime(P - 1)
@@ -235,10 +239,11 @@ def edit_step1(req: EditStep1Request):
 @app.post("/edit/step2", response_model=EditStep2Response)
 def edit_step2(req: EditStep2Request):
     key = (req.uid, req.did)
-    DSK = userDataDB[key]    
     if key not in userDataDB:
         raise HTTPException(status_code=400, detail="Current device not registered")
-    elif userDataDB[key] is None:
+    
+    DSK = userDataDB[key]
+    if DSK is None:
         raise HTTPException(status_code=403, detail="Current device has been revoked")
 
     r2 = random_coprime(P - 1)
