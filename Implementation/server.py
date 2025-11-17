@@ -21,6 +21,10 @@ def random_coprime(p_minus_1: int) -> int:
             return r
 
 # models
+class InitRequest(BaseModel):
+    unused: int
+    name: str = Query(...)
+
 class InitResponse(BaseModel):
     UID: int
     DID: int
@@ -101,19 +105,17 @@ def device_location(uid: int, did: int):
 @app.get("/config")
 def get_config():
     return {"p": P}
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 @app.post("/init", response_model=InitResponse)
-def init_device(unused: int, name: str = Query(...)):
+def init_device(req: InitRequest):
     constant = random.randint(1, 100000)
     UID = random.randint(10**9, 10**10 - 1)
     DID = random.randint(10**9, 10**10 - 1)
-    DSK = unused*constant
+    DSK = req.unused*constant
     userConstantDB[(UID, DID)] = constant
     userDataDB[(UID, DID)] = DSK
-    nameDB[(UID, DID)] = name
-    return {"UID": UID, "DID": DID, "name": name}
+    nameDB[(UID, DID)] = req.name
+    return {"UID": UID, "DID": DID, "name": req.name}
 
 @app.post("/register", response_model=RegisterResponse)
 def register_device(req: RegisterRequest):
@@ -279,3 +281,6 @@ def edit_step3(req: EditStep3Request):
 
     result = "successful"
     return{"result": result}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)

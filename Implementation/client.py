@@ -92,78 +92,45 @@ def inbound_socket(UID, DID, keyproduct):
                 conn.sendall(data_to_send.encode())
 
 def init_reg():
-    
     while True:
+        print("\nSign Up: Register new device")
+
+        uid = input("Enter your UID: ")
+        admin_did = input("Enter your admin DID: ")
 
         try:
+            loc = requests.get(
+                f"{SERVER}/device_location",
+                params={"uid": uid, "did": admin_did}
+            )
+            loc.raise_for_status()
+            referral_info = loc.json()
+            referral_ip = referral_info["ip"]
+            referral_port = referral_info["port"]
+        except requests.exceptions.HTTPError as e:
+            print("Could not find referral device:", e.response.json()["detail"])
+            sys.exit(1)
 
-            print("\nSign Up:")
-            print("1. Initialise user")
-            print("2. Register new device")
-            choice = int(input("Select function: "))
+        # connect to admin device
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            print(f"Connecting to referral device at {referral_ip}:{referral_port}...")
+            s.connect((referral_ip, referral_port))
+            s.sendall(b"Registration Request")
+            newdev_msg = s.recv(4096).decode()
+            if newdev_msg == b"REJECTED":
+                print("Registration Request Rejected")
+                sys.exit()
+            else:
+                data = json.loads(newdev_msg)
+                did, dk, unused, keyproduct = (
+                    data["DID"],
+                    data["DK"],
+                    data["unused"],
+                    data["keyproduct"]
+                )
+                did, dk, unused, keyproduct = int(did), int(dk), int(unused), list(keyproduct)
 
-            if choice == 1:
-                name = input("Enter device name: ")
-                dk, unused, keyproduct = keyDev()
-                init = requests.post(f"{SERVER}/init", params={"name": name, "unused": unused}).json()
-                uid, did = init["UID"], init["DID"]
-                print("Initialised:", init)
-
-                print (f"UID: {uid}")
-
-                #start listener
-                listener_thread = threading.Thread(target=inbound_socket, args=(uid, did, keyproduct), daemon=True)
-                listener_thread.start()
-                time.sleep(0.5) 
-
-                return uid, did, dk
-
-            elif choice == 2:
-                uid = input("Enter your UID: ")
-                referral_did = input("Enter the DID of your referral device: ")
-
-                try:
-                    loc = requests.get(
-                        f"{SERVER}/device_location",
-                        params={"uid": uid, "did": referral_did}
-                    )
-                    loc.raise_for_status()
-                    referral_info = loc.json()
-                    referral_ip = referral_info["ip"]
-                    referral_port = referral_info["port"]
-                except requests.exceptions.HTTPError as e:
-                    print("Could not find referral device:", e.response.json()["detail"])
-                    sys.exit(1)
-
-                # connect to referral device
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    print(f"Connecting to referral device at {referral_ip}:{referral_port}...")
-                    s.connect((referral_ip, referral_port))
-                    s.sendall(b"Registration Request")
-                    newdev_msg = s.recv(4096).decode()
-                    if newdev_msg == b"REJECTED":
-                        print("Registration Request Rejected")
-                        sys.exit()
-                    else:
-                        data = json.loads(newdev_msg)
-                        did, dk, unused, keyproduct = (
-                            data["DID"],
-                            data["DK"],
-                            data["unused"],
-                            data["keyproduct"]
-                        )
-                        did, dk, unused, keyproduct = int(did), int(dk), int(unused), list(keyproduct)
-                    
-                #start listener
-                listener_thread = threading.Thread(target=inbound_socket, args=(uid, did, keyproduct), daemon=True)
-                listener_thread.start()
-                time.sleep(0.5) 
-
-                return uid, did, dk
-            
-        except ValueError:
-            print("Invalid input. Please try again.")
-            continue  
+        return uid, did, dk
 
 def fn_selection(UID, DID, DK):
 
