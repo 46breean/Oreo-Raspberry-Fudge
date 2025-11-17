@@ -1,4 +1,4 @@
-import random, math, os
+import random, math, os, uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import Dict, Tuple, Optional
@@ -13,10 +13,6 @@ P = 29996224275833
 
 # FastAPI app
 app = FastAPI(title="Encrypted Indexing Server", version="1.0.0")
-
-@app.get("/")
-def read_root():
-    return {"message": "Server is running"}
 
 def random_coprime(p_minus_1: int) -> int:
     while True:
@@ -105,6 +101,8 @@ def device_location(uid: int, did: int):
 @app.get("/config")
 def get_config():
     return {"p": P}
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 @app.post("/init", response_model=InitResponse)
 def init_device(unused: int, name: str = Query(...)):
