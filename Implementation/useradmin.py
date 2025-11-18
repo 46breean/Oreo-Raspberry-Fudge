@@ -1,4 +1,4 @@
-import requests, random, math, hashlib, socket, sys, threading, time, subprocess, tempfile, os, json, ast
+import requests, random, math, hashlib, socket, sys, threading, time, tempfile, os, json, ast
 from primePy import primes
 
 SERVER = "http://172.22.22.27:8000"
@@ -14,7 +14,7 @@ def random_coprime(p_minus_1: int) -> int:
         if math.gcd(r, p_minus_1) == 1:
             return r
 
-def keyDev():
+def selfKeyDev():
     keyproduct = [random.choice(primeList) for _ in range (100)]
     bitstring = []
 
@@ -34,6 +34,61 @@ def keyDev():
 
     return base, unused, keyproduct
 
+def regKeyDev(keyproduct):
+    bitstring = []
+    requirement = False
+    while requirement == False:
+        bitstring = [random.randint(0, 1) for _ in range(100)]
+        if bitstring.count(1)>=50 and bitstring.count(1)<=70:
+            requirement = True
+    base = 1
+    unused = 1
+
+    for i in range(100):
+        if bitstring[i] == 1:
+            base *= keyproduct[i]
+        else:
+            unused *= keyproduct[i]
+
+    return base, unused
+
+def handle_registration(UID, DID, keyproduct, addr):
+    print(f"[Device {DID}] Incoming registration request from {addr}")
+    regreq_ans = int(input("Type 1 to accept request, press any other key to reject request: "))
+
+    if regreq_ans == 1:
+        while True:
+            new_dk, unused = regKeyDev(keyproduct)
+            register = requests.post(
+                f"{SERVER}/register",
+                json={"uid": UID, "did": DID, "unused": unused}
+            )
+            if register.status_code == 409:
+                print("DK invalid, retrying...")
+                continue
+
+            try:
+                register.raise_for_status()
+                register_data = register.json()
+                break
+            except requests.exceptions.HTTPError as e:
+                try:
+                    # Try to extract JSON error detail
+                    err_detail = e.response.json().get("detail", str(e))
+                except ValueError:
+                    # If response is not JSON
+                    err_detail = e.response.text or str(e)
+                print("Registration failed:", err_detail)
+                continue  # try again or break depending on your logic
+
+        new_did = register_data["new_did"]
+        data = [new_did, new_dk, unused]
+
+    else:
+        data = b"REJECTED"
+
+    return data
+
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -43,7 +98,7 @@ def get_local_ip():
         s.close()
     return ip
 
-def inbound_socket(UID, DID, keyproduct):
+def inbound_socket(UID, DID, keyProduct):
 
     HOST = get_local_ip()
 
@@ -59,54 +114,65 @@ def inbound_socket(UID, DID, keyproduct):
         while True:
             conn, addr = s.accept()
             with conn:
-                newdev_msg = conn.recv(1024).decode()
-                if not newdev_msg:
-                    continue
+                deviceMsg = conn.recv(1024).decode()
+                if deviceMsg == "Registration Request":
+                    data = handle_registration(UID, DID, keyProduct, addr)
+                    regData = {"DID": data[0], "DK": data[1], "unused": data[2]}
+                    regData["keyproduct"] = keyProduct
+                    data_to_send = json.dumps(regData)
 
-                tmp = tempfile.NamedTemporaryFile(delete=False)
-                tmp_path = tmp.name
-                tmp.close()
+                    conn.sendall(data_to_send.encode())
 
-                subprocess.Popen([
-                    sys.executable, "registration.py",
-                    str(UID), str(DID),
-                    addr[0],
-                    str(addr[1]),
-                    newdev_msg,
-                    str(keyproduct),
-                    tmp_path
-                ])
-
-                while not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
-                    time.sleep(0.2)
-
-                with open(tmp_path, "r") as f:
-                    data = json.load(f)
-
-                os.remove(tmp_path)
-
-                data = {"DID": data[0], "DK": data[1], "unused": data[2]}
-                data["keyproduct"] = keyproduct
-                data_to_send = json.dumps(data)
-
-                conn.sendall(data_to_send.encode())
+                    print(f"[Device {data[0]}] Device registration completed.")
+                elif deviceMsg == "encryptData":
+                    pass
+                elif deviceMsg == "decryptData":
+                    pass
+                else:
+                    print("This functionality has not been programmed for.")
 
 def init_reg():
     while True:
         print("\nSign Up: Initialise user")
         name = "admin"
         print(f"Device name: {name}")
-        dk, unused, keyproduct = keyDev()
-        init = requests.post(f"{SERVER}/init", json={"name": name, "unused": unused}).json()
-        uid, did = init["UID"], init["DID"] 
-        print (f"Admin device initialised with UID: {uid}, admin DID: {did}")
+        dk, unused, keyproduct = selfKeyDev()
 
-        return uid, did, dk, keyproduct
+        #Registration with server
+        init = requests.post(f"{SERVER}/init", json={"name": name, "unused": unused}).json()
+        uid, did = init["UID"], init["DID"]
+
+        #Obtaining school encryption key
+        try:
+            loc = requests.get(
+                f"{SERVER}/device_location",
+                params={"uid": 1, "did": 1}
+            )
+            loc.raise_for_status()
+            referral_info = loc.json()
+            referral_ip = referral_info["ip"]
+            referral_port = referral_info["port"]
+        except requests.exceptions.HTTPError as e:
+            print("Could not find server admin:", e.response.json()["detail"])
+            sys.exit(1)
+        
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            print(f"Connecting to server admin at {referral_ip}:{referral_port}...")
+            s.connect((referral_ip, referral_port))
+            data = json.dumps({"deviceMsg": "Obtain school encryption key", "UID": uid, "DID":did}).encode()
+            s.sendall(data)
+            admin_reply = s.recv(4096).decode()
+            schoolKey = int(json.loads(admin_reply))
+
+        print(f"[User {uid}] User registration completed.")
+        print(f"Admin device initialised with UID: {uid}, Admin DID: {did}, School Encryption Key {schoolKey}.")
+
+        return uid, did, dk, keyproduct, schoolKey
 
 p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729)
 
-UID, DID, DK, keyProduct = init_reg()
+UID, DID, DK, keyProduct, schoolKey = init_reg()
 
 #start listener
 listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct), daemon=False)

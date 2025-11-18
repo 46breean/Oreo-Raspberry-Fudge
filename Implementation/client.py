@@ -1,4 +1,4 @@
-import requests, random, math, hashlib, socket, sys, threading, time, subprocess, tempfile, os, json, ast
+import requests, random, math, hashlib, socket, sys, threading, time, tempfile, os, json, ast
 from primePy import primes
 
 SERVER = "http://172.22.22.27:8000"
@@ -43,54 +43,6 @@ def get_local_ip():
         s.close()
     return ip
 
-
-def inbound_socket(UID, DID, keyproduct):
-
-    HOST = get_local_ip()
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, 0))
-        s.listen()
-
-        PORT = s.getsockname()[-1]
-        requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT})
-
-        print(f"[Device {DID}] Listener started on {HOST}:{PORT}...")
-
-        while True:
-            conn, addr = s.accept()
-            with conn:
-                newdev_msg = conn.recv(1024).decode()
-                if not newdev_msg:
-                    continue
-
-                tmp = tempfile.NamedTemporaryFile(delete=False)
-                tmp_path = tmp.name
-                tmp.close()
-
-                subprocess.Popen([
-                    "start", "cmd", "/c",
-                    sys.executable, "registration.py",
-                    str(UID), str(DID),
-                    str(addr),
-                    newdev_msg,
-                    str(keyproduct), str(tmp_path)
-                ], shell=True)
-
-                while not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
-                    time.sleep(0.2)
-
-                with open(tmp_path, "r") as f:
-                    data = json.load(f)
-
-                os.remove(tmp_path)
-
-                data = {"DID": data[0], "DK": data[1], "unused": data[2]}
-                data["keyproduct"] = keyproduct
-                data_to_send = json.dumps(data)
-
-                conn.sendall(data_to_send.encode())
-
 def init_reg():
     while True:
         print("\nSign Up: Register new device")
@@ -116,12 +68,12 @@ def init_reg():
             print(f"Connecting to referral device at {referral_ip}:{referral_port}...")
             s.connect((referral_ip, referral_port))
             s.sendall(b"Registration Request")
-            newdev_msg = s.recv(4096).decode()
-            if newdev_msg == b"REJECTED":
+            admin_reply = s.recv(4096).decode()
+            if admin_reply == b"REJECTED":
                 print("Registration Request Rejected")
                 sys.exit()
             else:
-                data = json.loads(newdev_msg)
+                data = json.loads(admin_reply)
                 did, dk, unused, keyproduct = (
                     data["DID"],
                     data["DK"],
@@ -129,6 +81,7 @@ def init_reg():
                     data["keyproduct"]
                 )
                 did, dk, unused, keyproduct = int(did), int(dk), int(unused), list(keyproduct)
+                print(f"[Device {DID}] Device registration completed")
 
         return uid, did, dk
 
