@@ -1,4 +1,4 @@
-import requests, random, math, hashlib, socket, sys, threading, time, tempfile, os, json, ast
+import requests, random, math, hashlib, socket, sys, json, ast
 from primePy import primes
 
 SERVER = "http://172.22.22.27:8000"
@@ -47,8 +47,8 @@ def init_reg():
     while True:
         print("\nSign Up: Register new device")
 
-        uid = input("Enter your UID: ")
-        admin_did = input("Enter your admin DID: ")
+        uid = int(input("Enter your UID: "))
+        admin_did = int(input("Enter your admin DID: "))
 
         try:
             loc = requests.get(
@@ -70,23 +70,17 @@ def init_reg():
             data = {"deviceMsg": "Register New Device"}
             s.sendall(json.dumps(data).encode())
             admin_reply = s.recv(4096).decode()
-            if admin_reply == b"REJECTED":
+            if admin_reply == "REJECTED":
                 print("Registration Request Rejected")
                 sys.exit()
             else:
                 data = json.loads(admin_reply)
-                did, dk, unused, keyproduct = (
-                    data["DID"],
-                    data["DK"],
-                    data["unused"],
-                    data["keyproduct"]
-                )
-                did, dk, unused, keyproduct = int(did), int(dk), int(unused), list(keyproduct)
+                did, dk = int(data["DID"]), int(data["DK"])
                 print(f"[Device {did}] Device registration completed")
 
         return uid, did, admin_did, dk, admin_ip, admin_port
 
-def fn_selection(UID, DID, DK):
+def fn_selection(UID:int, DID:int, DK:int):
     while True:
         print("\nDevice Menu:")
         print("1. Revoke device")
@@ -94,6 +88,7 @@ def fn_selection(UID, DID, DK):
         print("3. Edit Database")
         print("4. Exit")
         choice = int(input("Select function: "))
+        global p
 
         if choice == 1:
             try:
@@ -115,10 +110,10 @@ def fn_selection(UID, DID, DK):
             print(revoke)
         
         elif choice == 2:
-            index = int(input("Enter a student data query: "))
-            hashed_index = hash_int(index) % p
-            r1 = random_coprime(p - 1)
-            blinded = pow(hashed_index, DK * r1, p)
+            index:int = int(input("Enter a student data query: "))
+            hashed_index:int = hash_int(index) % p
+            r1:int = random_coprime(p - 1)
+            blinded:int = pow(hashed_index, DK * r1, p)
 
             try:
                 resp1 = requests.post(
@@ -151,7 +146,7 @@ def fn_selection(UID, DID, DK):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 print(f"Connecting to admin device at {adminIP}:{adminPort}...")
                 s.connect((adminIP, adminPort))
-                data = {"deviceMsg": "Decrypt Data", "DID": DID, "StudentData": SData}
+                data:dict[str, str|int] = {"deviceMsg": "Decrypt Data", "DID": DID, "StudentData": SData}
                 s.sendall(json.dumps(data).encode())
                 SData = json.loads(s.recv(4096).decode())
                 if SData == b"REJECTED":
@@ -191,7 +186,7 @@ def fn_selection(UID, DID, DK):
             
             print("===== Encrypted Index Database Editing =====")
             entries = int(input("Enter the number of index(es) you would like to edit: "))
-            for i in range(entries):
+            for _ in range(entries):
                 index = int(input("Enter an index to add or edit: "))
                 hashed_index = hash_int(index) % p
                 r1 = random_coprime(p - 1)
@@ -235,8 +230,8 @@ def fn_selection(UID, DID, DK):
         else:
                 print("Invalid choice.")
 
-p = requests.get(f"{SERVER}/config").json()["p"]
-primeList = primes.upto(104729)
+p:int = requests.get(f"{SERVER}/config").json()["p"]
+primeList:list[int] = primes.upto(104729)
 
 UID, DID, adminDID, DK, adminIP, adminPort = init_reg()
 fn_selection(UID, DID, DK)

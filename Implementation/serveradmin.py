@@ -7,21 +7,21 @@ SERVER = "http://172.22.22.27:8000"
 UID = 1
 DID = 1
 
-def masterKeyDev():
+def masterKeyDev() -> bytes:
     masterKey = AESGCMSIV.generate_key(bit_length=256)
     return masterKey
 
-def schoolKeyDev(masterKey, UID, DID) -> bytes:
+def schoolKeyDev(masterKey:bytes, UID:int, DID:int) -> bytes:
     salt = hashlib.sha256(f"{UID}{DID}".encode()).digest()
     schoolKey = HKDF(algorithm = hashes.SHA256(), length = 32, salt = salt, info = b"").derive(masterKey)
     return schoolKey
 
-def runServer():
+def runServer() -> None:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     path = os.path.join(current_dir, "server.py")
     subprocess.Popen(f'start cmd /k "{sys.executable} {path}"', shell=True)
 
-def get_local_ip():
+def get_local_ip() -> str:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("8.8.8.8", 80))
@@ -30,21 +30,16 @@ def get_local_ip():
         s.close()
     return ip
 
-def inbound_socket(UID, DID, masterKey):
-
+def inbound_socket(UID:int, DID:int, masterKey:bytes) -> None:
     HOST = get_local_ip()
-
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, 0))
         s.listen()
-
         PORT = s.getsockname()[-1]
         requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT})
-
         print(f"[Server Admin] Listener started on {HOST}:{PORT}...")
-
         while True:
-            conn, addr = s.accept()
+            conn = s.accept()[0] #addr unused
             with conn:
                 data = json.loads(conn.recv(1024).decode())
                 deviceMsg, uid, did = data["deviceMsg"], data["UID"], data["DID"]

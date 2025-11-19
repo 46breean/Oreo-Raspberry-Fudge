@@ -1,11 +1,13 @@
-import random, math, os, uvicorn
+import random, math, uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import Dict, Tuple, Optional
 
 userDataDB: Dict[Tuple[int, int], Optional[int]] = {}
 userConstantDB: Dict[Tuple[int, int], Optional[int]] = {}
-nameDB, indexDataDB, studentDataDB = {}, {}, {}
+nameDB: Dict[Tuple[int, int], str] = {}
+indexDataDB: Dict[int, list[int]] = {}
+studentDataDB: Dict[int, str] = {}
 r2_store: Dict[Tuple[int, int], int] = {}
 
 # prime modulus
@@ -61,14 +63,14 @@ class EvalStep2Request(BaseModel):
     unblinded1: int
 
 class EvalStep2Response(BaseModel):
-    query_result: dict
+    query_result: dict[int, str]
 
 class EditStep1Request(BaseModel):
     dataEntryType: int
-    SData: dict
+    SData: dict[str, str]
 
 class EditStep1Response(BaseModel):
-    newDataIDList: list
+    newDataIDList: list[int]
 
 class EditStep2Request(BaseModel):
     uid: int
@@ -83,7 +85,7 @@ class EditStep3Request(BaseModel):
     did: int
     unblinded1: int
     addOrRemove: int
-    DataID: list
+    DataID: list[str]
 
 class EditStep3Response(BaseModel):
     result: str
@@ -92,12 +94,12 @@ class EditStep3Response(BaseModel):
 device_locations = {}  # (uid, did) -> (ip, port)
 
 @app.post("/announce")
-def announce(uid: int, did: int, ip: str, port: int):
+def announce(uid: int, did: int, ip: str, port: int) -> dict[str, str]:
     device_locations[(uid, did)] = (ip, port)
     return {"status": "ok"}
 
 @app.get("/device_location")
-def device_location(uid: int, did: int):
+def device_location(uid: int, did: int) -> dict[str, int]:
     if (uid, did) not in device_locations:
         raise HTTPException(status_code=404, detail="Device not found")
     return {"ip": device_locations[(uid, did)][0], "port": device_locations[(uid, did)][1]}
@@ -107,7 +109,7 @@ def get_config():
     return {"p": P}
 
 @app.post("/init", response_model=InitResponse)
-def init_device(req: InitRequest):
+def init_device(req: InitRequest) -> dict[str, int|str]:
     constant = random.randint(1, 100000)
     UID = random.randint(10**9, 10**10 - 1)
     DID = random.randint(10**9, 10**10 - 1)
@@ -118,7 +120,7 @@ def init_device(req: InitRequest):
     return {"UID": UID, "DID": DID, "name": req.name}
 
 @app.post("/register", response_model=RegisterResponse)
-def register_device(req: RegisterRequest):
+def register_device(req: RegisterRequest) -> dict[str, int]:
     key = (req.uid, req.did)
 
     if key not in userDataDB:
@@ -132,7 +134,7 @@ def register_device(req: RegisterRequest):
     if DSK_constant is None:
         raise HTTPException(status_code=400, detail="Current device not registered.")
     
-    existing_dsks = [dsk for (u, d), dsk in userDataDB.items() if u == req.uid]
+    existing_dsks = [dsk for (u, _), dsk in userDataDB.items() if u == req.uid]
     new_dsk = DSK_constant * req.unused
     if new_dsk in existing_dsks:
         raise HTTPException(status_code=409, detail="DK generated is invalid")
@@ -150,7 +152,7 @@ def register_device(req: RegisterRequest):
     return {"uid": req.uid, "new_did": new_did}
 
 @app.get("/revoke_list", response_model=RevokeListResponse)
-def revoke_list(uid: int = Query(...), did: int = Query(...)):
+def revoke_list(uid: int = Query(...), did: int = Query(...)) -> dict[str, list[int]]:
     key = (uid, did)
     if key not in userDataDB:
         raise HTTPException(status_code=400, detail="Current device not registered")
@@ -161,7 +163,7 @@ def revoke_list(uid: int = Query(...), did: int = Query(...)):
     return {"dids": dids}
 
 @app.post("/revoke")
-def revoke(req: RevokeRequest):
+def revoke(req: RevokeRequest) -> dict[str, str]:
 
     current = (req.uid, req.did)
     target = (req.uid, req.revoke_did)
@@ -178,7 +180,7 @@ def revoke(req: RevokeRequest):
     return {"Status": "Revocation Completed"}
 
 @app.post("/eval/step1", response_model=EvalStep1Response)
-def eval_step1(req: EvalStep1Request):
+def eval_step1(req: EvalStep1Request) -> dict[str, int]:
     key = (req.uid, req.did)
     if key not in userDataDB:
         raise HTTPException(status_code=400, detail="Current device not registered")
@@ -195,15 +197,14 @@ def eval_step1(req: EvalStep1Request):
     return {"blinded2": blinded2}
 
 @app.post("/eval/step2", response_model=EvalStep2Response)
-def eval_step2(req: EvalStep2Request):
+def eval_step2(req: EvalStep2Request) -> dict[str, dict[int, str]]:
     key = (req.uid, req.did)
     if key not in r2_store:
         raise HTTPException(status_code=400, detail="No pending evaluation for this device")
     r2 = r2_store.pop(key)
 
     r2_inv = pow(r2, -1, P - 1)
-    final_value = pow(req.unblinded1, r2_inv, P)
-
+    final_value:int = pow(req.unblinded1, r2_inv, P)
     if final_value not in indexDataDB:
         raise HTTPException(status_code=400, detail="Encrypted Index not found in this server.")
     
@@ -215,31 +216,26 @@ def eval_step2(req: EvalStep2Request):
         if intID not in studentDataDB:
             raise HTTPException(status_code=400,detail="No student found.")
         SData = studentDataDB[intID]
-        if SData is None:
-            raise HTTPException(status_code=400,detail="No associated student data found.")
         query_result[intID] = SData
 
     return {"query_result": query_result}
     
 @app.post("/edit/step1", response_model=EditStep1Response)
-def edit_step1(req: EditStep1Request):
-    newDataIDList = []
-    global studentDataDB
-
+def edit_step1(req: EditStep1Request) -> dict[str, list[int]]:
+    newDataIDList:list[int] = []
     for DataID,Data in req.SData.items():
+        DataID = int(DataID)
         if req.dataEntryType == 1:
             DataID = random.randint(10**7, 10**8 - 1)
             newDataIDList.append(DataID)
         elif req.dataEntryType == 2:
             if DataID not in studentDataDB:
                 raise HTTPException(status_code=400,detail="One or more DataID is not found in the student database. Upload new data and edit existing data separately.")
-
         studentDataDB[DataID] = Data
-
     return {"newDataIDList": newDataIDList}
 
 @app.post("/edit/step2", response_model=EditStep2Response)
-def edit_step2(req: EditStep2Request):
+def edit_step2(req: EditStep2Request) -> dict[str, int]:
     key = (req.uid, req.did)
     if key not in userDataDB:
         raise HTTPException(status_code=400, detail="Current device not registered")
@@ -256,7 +252,7 @@ def edit_step2(req: EditStep2Request):
     return {"blinded2": blinded2}
 
 @app.post("/edit/step3", response_model=EditStep3Response)
-def edit_step3(req: EditStep3Request):
+def edit_step3(req: EditStep3Request) -> dict[str, str]:
     key = (req.uid, req.did)
     if key not in r2_store:
         raise HTTPException(status_code=400, detail="No pending evaluation for this device")
@@ -264,23 +260,23 @@ def edit_step3(req: EditStep3Request):
 
     r2_inv = pow(r2, -1, P - 1)
     final_value = pow(req.unblinded1, r2_inv, P)
+    intDataID = [int(id) for id in req.DataID]
 
-    if final_value in indexDataDB:
-        for ID in req.DataID:
+    for id in intDataID:
+        if final_value in indexDataDB:
             if req.addOrRemove == 1:
-                indexDataDB[final_value].append(ID)
+                indexDataDB[final_value].append(id)
             else:
-                if ID not in indexDataDB:
+                if id not in indexDataDB:
                     raise HTTPException(status_code=400, detail="DataID not found in index database.")
-                indexDataDB[final_value].remove(ID)
-    else:
-        if req.addOrRemove == 1:
-            indexDataDB[final_value] = list(req.DataID)
+                indexDataDB[final_value].remove(id)
         else:
-            raise HTTPException(status_code=400, detail="You cannot remove data IDs from a non-existent index.")
+            if req.addOrRemove == 1:
+                indexDataDB[final_value] = intDataID
+            else:
+                raise HTTPException(status_code=400, detail="You cannot remove data IDs from a non-existent index.")
 
-    result = "successful"
-    return{"result": result}
+    return{"result": "successful"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -16,7 +16,7 @@ def random_coprime(p_minus_1: int) -> int:
         if math.gcd(r, p_minus_1) == 1:
             return r
 
-def selfKeyDev():
+def selfKeyDev() -> tuple[int, int, list[int]]:
     keyproduct = [random.choice(primeList) for _ in range (100)]
     bitstring = []
 
@@ -36,7 +36,7 @@ def selfKeyDev():
 
     return base, unused, keyproduct
 
-def regKeyDev(keyproduct):
+def regKeyDev(keyproduct:list[int]) -> tuple[int, int]:
     bitstring = []
     requirement = False
     while requirement == False:
@@ -54,7 +54,7 @@ def regKeyDev(keyproduct):
 
     return base, unused
 
-def handle_registration(UID, DID, keyproduct, addr):
+def handle_registration(UID:int, DID:int, keyproduct:list[int], addr:int) -> list[int]|bytes:
     print(f"[Admin Device] Incoming registration request from {addr}")
     regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
 
@@ -83,8 +83,8 @@ def handle_registration(UID, DID, keyproduct, addr):
                 print("Registration failed:", err_detail)
                 continue  # try again or break depending on your logic
 
-        new_did = register_data["new_did"]
-        data = [new_did, new_dk, unused]
+        new_did:int = register_data["new_did"]
+        data = [new_did, new_dk]
 
     else:
         data = b"REJECTED"
@@ -105,7 +105,7 @@ def decryptData(Data:str, schoolKey:bytes) -> str:
     plaintext = aes.decrypt(nonce, ciphertext, None)
     return plaintext.decode("utf-8")
 
-def get_local_ip():
+def get_local_ip() -> str:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("8.8.8.8", 80))
@@ -114,17 +114,13 @@ def get_local_ip():
         s.close()
     return ip
 
-def inbound_socket(UID, DID, keyProduct):
-
+def inbound_socket(UID:int, DID:int, keyProduct:list[int]) -> None:
     HOST = get_local_ip()
-
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, 0))
         s.listen()
-
         PORT = s.getsockname()[-1]
         requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT})
-
         print(f"[Device {DID}] Listener started on {HOST}:{PORT}...")
 
         while True:
@@ -135,42 +131,43 @@ def inbound_socket(UID, DID, keyProduct):
 
                 if deviceMsg == "Register New Device":
                     data = handle_registration(UID, DID, keyProduct, addr)
-                    regData = {"DID": data[0], "DK": data[1], "unused": data[2]}
-                    regData["keyproduct"] = keyProduct
+                    regData:dict[str,int|list[int]] = {"DID": data[0], "DK": data[1]}
                     conn.sendall(json.dumps(regData).encode())
                     print(f"[Device {data[0]}] Device registration completed.")
                 
                 elif deviceMsg == "Encrypt Data":
                     did = data["DID"]
-                    SData:dict = data["StudentData"]
+                    plaintextData:dict[str, str] = data["StudentData"]
+                    ciphertextData:dict[str, str] = {}
                     print(f"[Admin Device] Incoming data encryption request from device {did}")
                     regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
                     if regreq_ans == 1:
-                        for DataID, Data in SData.items():
-                            SData[DataID] = encryptData(Data, schoolKey)
+                        for DataID, Data in plaintextData.items():
+                            ciphertextData[DataID] = encryptData(Data, schoolKey)
                     else:
                         data = b"REJECTED"
                     print("Encryption successful.")
-                    conn.sendall(json.dumps(SData).encode())
+                    conn.sendall(json.dumps(ciphertextData).encode())
                 
                 elif deviceMsg == "Decrypt Data":
                     did = data["DID"]
-                    SData:dict = data["StudentData"]
+                    ciphertextData:dict[str, str] = data["StudentData"]
+                    plaintextData:dict[str, str] = {}
                     print(f"[Admin Device] Incoming data decryption request from device {did}")
                     regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
                     if regreq_ans == 1:
-                        for DataID, Data in SData.items():
+                        for DataID, Data in ciphertextData.items():
                             print(Data)
-                            SData[DataID] = decryptData(Data, schoolKey)
+                            plaintextData[DataID] = decryptData(Data, schoolKey)
                     else:
                         data = b"REJECTED"
                     print("Decryption successful.")
-                    conn.sendall(json.dumps(SData).encode())
+                    conn.sendall(json.dumps(plaintextData).encode())
                 
                 else:
                     print("This functionality has not yet been programmed for.")
 
-def init_reg():
+def init_reg() -> tuple[int, int, int, list[int], bytes]:
     while True:
         print("\nSign Up: Initialise user")
         name = "admin"
