@@ -3,7 +3,7 @@ from primePy import primes
 
 SERVER = "http://172.22.22.27:8000"
 
-def hash_int(x: int) -> int:
+def hash_int(x: int):
     m = hashlib.sha256()
     m.update(str(x).encode())
     return int(m.hexdigest(), 16)
@@ -14,38 +14,7 @@ def random_coprime(p_minus_1: int) -> int:
         if math.gcd(r, p_minus_1) == 1:
             return r
 
-def keyDev():
-    keyproduct = [random.choice(primeList) for _ in range (100)]
-    bitstring = []
-
-    requirement = False
-    while requirement == False:
-        bitstring = [random.randint(0, 1) for _ in range(100)]
-        if bitstring.count(1)>=50 and bitstring.count(1)<=70:
-            requirement = True
-    base = 1
-    unused = 1
-
-    for i in range(100):
-        if bitstring[i] == 1:
-            base *= keyproduct[i]
-        else:
-            unused *= keyproduct[i]
-
-    return base, unused, keyproduct
-
-# def encryptMessage(schoolKey, plainText, aad=b""):
-#     nonce = os.urandom(12)
-#     aesgcm = AESGCM(schoolKey)
-#     ciphertext = aesgcm.encrypt(nonce, plainText, aad)
-#     return nonce, ciphertext
-
-# def decryptMessage(schoolKey, nonce, cipherText, aad=b""):
-#     aesgcm = AESGCM(schoolKey)
-#     plaintext = aesgcm.decrypt(nonce, cipherText, aad)
-#     return plaintext
-
-def get_local_ip():
+def get_local_ip() -> str:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("8.8.8.8", 80))
@@ -55,6 +24,13 @@ def get_local_ip():
     return ip
 
 def init_reg():
+    uid: int
+    did: int
+    admin_did: int
+    dk: int
+    admin_ip: str
+    admin_port: int
+    
     while True:
         print("\nSign Up: Register new device")
 
@@ -85,13 +61,13 @@ def init_reg():
                 print("Registration Request Rejected")
                 sys.exit()
             else:
-                data = json.loads(admin_reply)
-                did, dk = int(data["DID"]), int(data["DK"])
+                adminReply = json.loads(admin_reply)
+                did, dk = int(adminReply["DID"]), int(adminReply["DK"])
                 print(f"[Device {did}] Device registration completed")
 
         return uid, did, admin_did, dk, admin_ip, admin_port
 
-def fn_selection(UID:int, DID:int, DK:int):
+def fn_selection(uid:int, did:int, dk:int):
     while True:
         print("\nDevice Menu:")
         print("1. Revoke device")
@@ -99,13 +75,12 @@ def fn_selection(UID:int, DID:int, DK:int):
         print("3. Edit Database")
         print("4. Exit")
         choice = int(input("Select function: "))
-        global p
 
         if choice == 1:
             try:
                 revoke_list = requests.get(
                     f"{SERVER}/revoke_list",
-                    params = {"uid": UID, "did": DID}
+                    params = {"uid": uid, "did": did}
                 )
                 revoke_list.raise_for_status()
             except requests.exceptions.HTTPError as e:
@@ -116,18 +91,19 @@ def fn_selection(UID:int, DID:int, DK:int):
             revoke_did = int(input("Select DID to revoke:"))
             revoke = requests.post(
                 f"{SERVER}/revoke",
-                json={"uid": UID, "did": DID, "revoke_did": revoke_did}
+                json={"uid": uid, "did": did, "revoke_did": revoke_did}
             ).json()
             print(revoke)
         
         elif choice == 2:
+            queryResult: dict[str, str] = {}
+            data: dict[str, str|int|dict[str, str]]
+            
             print("You can query in 3 ways:")
             print("1. Single query: results that satisfy the given condition")
             print("2. AND query: only results that satisfy all given conditions")
             print("3. OR query: results that satisfy at least one given condition (i.e. multiple discrete single queries)")
             queryType = int(input("Enter your choice (1/2/3): "))
-            
-            queryResult = {}
 
             indexes = [index.strip() for index in input("Enter student data quer(ies) separated by commas: ").split(",")]
             for index in indexes:
@@ -135,10 +111,10 @@ def fn_selection(UID:int, DID:int, DK:int):
                 hashed_index = hash_int(intIndex) % p
                 r1 = random_coprime(p - 1)
 
-                blinded = pow(hashed_index, DK * r1, p)
+                blinded = pow(hashed_index, dk * r1, p)
 
                 try:
-                    resp1 = requests.post(f"{SERVER}/eval/step1", json={"uid": UID, "did": DID, "blinded": blinded})
+                    resp1 = requests.post(f"{SERVER}/eval/step1", json={"uid": uid, "did": did, "blinded": blinded})
                     resp1.raise_for_status()
                 except requests.exceptions.HTTPError as e:
                     print("Step 1 failed:", e.response.json()["detail"])
@@ -155,7 +131,7 @@ def fn_selection(UID:int, DID:int, DK:int):
                 unblinded1 = pow(blinded2, r1_inv, p)
 
                 try:
-                    resp2 = requests.post(f"{SERVER}/eval/step2", json={"uid": UID, "did": DID, "unblinded1": unblinded1}).json()
+                    resp2 = requests.post(f"{SERVER}/eval/step2", json={"uid": uid, "did": did, "unblinded1": unblinded1}).json()
                     tempQueryResult = resp2["query_result"]
                 except requests.exceptions.HTTPError as e:
                     print("Step 2 failed:", e.response.json()["detail"])
@@ -173,7 +149,7 @@ def fn_selection(UID:int, DID:int, DK:int):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 print(f"Connecting to admin device at {adminIP}:{adminPort}...")
                 s.connect((adminIP, adminPort))
-                data:dict[str, str|int|dict[str, str]] = {"deviceMsg": "Decrypt Data", "DID": DID, "StudentData": queryResult}
+                data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult}
                 s.sendall(json.dumps(data).encode())
                 SData = json.loads(s.recv(4096).decode())
                 if SData == b"REJECTED":
@@ -192,7 +168,7 @@ def fn_selection(UID:int, DID:int, DK:int):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 print(f"Connecting to admin device at {adminIP}:{adminPort}...")
                 s.connect((adminIP, adminPort))
-                data = {"deviceMsg": "Encrypt Data", "DID": DID, "StudentData": SData}
+                data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData}
                 s.sendall(json.dumps(data).encode())
                 SData = json.loads(s.recv(4096).decode())
                 if SData == b"REJECTED":
@@ -227,12 +203,12 @@ def fn_selection(UID:int, DID:int, DK:int):
                 hashed_index = hash_int(index) % p
                 r1 = random_coprime(p - 1)
 
-                blinded = pow(hashed_index, DK * r1, p)
+                blinded = pow(hashed_index, dk * r1, p)
 
                 try:
                     resp2 = requests.post(
                         f"{SERVER}/edit/step2",
-                        json={"uid": UID, "did": DID, "blinded": blinded}
+                        json={"uid": uid, "did": did, "blinded": blinded}
                     )
                     resp2.raise_for_status()
                 except requests.exceptions.HTTPError as e:
@@ -252,7 +228,7 @@ def fn_selection(UID:int, DID:int, DK:int):
                 addOrRemove = int(input("Would you like to (1) add or (2) remove Data ID(s) from the index: "))
                 DataID = [dataID.strip() for dataID in input("Enter DataID list separated by commas: ").split(",")]
                 try:
-                    resp3 = requests.post(f"{SERVER}/edit/step3", json={"uid": UID, "did": DID, "unblinded1": unblinded1, "addOrRemove": addOrRemove, "DataID": DataID}).json()
+                    resp3 = requests.post(f"{SERVER}/edit/step3", json={"uid": uid, "did": did, "unblinded1": unblinded1, "addOrRemove": addOrRemove, "DataID": DataID}).json()
                     print("Index edit", resp3["result"])
                 except requests.exceptions.HTTPError as e:
                     print("Step 3 failed:", e.response.json()["detail"])
@@ -264,7 +240,7 @@ def fn_selection(UID:int, DID:int, DK:int):
             break
         
         else:
-                print("Invalid choice.")
+            print("Invalid choice.")
 
 p:int = requests.get(f"{SERVER}/config").json()["p"]
 primeList:list[int] = primes.upto(104729)

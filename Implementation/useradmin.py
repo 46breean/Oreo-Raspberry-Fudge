@@ -2,7 +2,6 @@ from primePy import primes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
 import requests, random, math, hashlib, socket, sys, threading, json, base64
 
-
 SERVER = "http://172.22.22.27:8000"
 
 def hash_int(x: int) -> int:
@@ -16,35 +15,36 @@ def random_coprime(p_minus_1: int) -> int:
         if math.gcd(r, p_minus_1) == 1:
             return r
 
-def selfKeyDev() -> tuple[int, int, list[int]]:
-    keyproduct = [random.choice(primeList) for _ in range (100)]
-    bitstring = []
+def selfKeyDev():
+    keyProduct: list[int] = [random.choice(primeList) for _ in range (100)]
+    bitstring: list[int] = []
+    base: int = 1
+    unused: int = 1
 
     requirement = False
     while requirement == False:
         bitstring = [random.randint(0, 1) for _ in range(100)]
         if bitstring.count(1)>=50 and bitstring.count(1)<=70:
             requirement = True
-    base = 1
-    unused = 1
 
     for i in range(100):
         if bitstring[i] == 1:
-            base *= keyproduct[i]
+            base *= keyProduct[i]
         else:
-            unused *= keyproduct[i]
+            unused *= keyProduct[i]
 
-    return base, unused, keyproduct
+    return base, unused, keyProduct
 
-def regKeyDev(keyproduct:list[int]) -> tuple[int, int]:
-    bitstring = []
+def regKeyDev(keyproduct:list[int]):
+    bitstring: list[int] = []
+    base: int = 1
+    unused: int = 1
+
     requirement = False
     while requirement == False:
         bitstring = [random.randint(0, 1) for _ in range(100)]
         if bitstring.count(1)>=50 and bitstring.count(1)<=70:
             requirement = True
-    base = 1
-    unused = 1
 
     for i in range(100):
         if bitstring[i] == 1:
@@ -54,7 +54,7 @@ def regKeyDev(keyproduct:list[int]) -> tuple[int, int]:
 
     return base, unused
 
-def handle_registration(UID:int, DID:int, keyproduct:list[int], addr:int) -> list[int]|bytes:
+def handle_registration(uid:int, did:int, keyproduct:list[int], addr:int) -> list[int]|bytes:    
     print(f"[Admin Device] Incoming registration request from {addr}")
     regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
 
@@ -63,7 +63,7 @@ def handle_registration(UID:int, DID:int, keyproduct:list[int], addr:int) -> lis
             new_dk, unused = regKeyDev(keyproduct)
             register = requests.post(
                 f"{SERVER}/register",
-                json={"uid": UID, "did": DID, "unused": unused}
+                json={"uid": uid, "did": did, "unused": unused}
             )
             if register.status_code == 409:
                 print("DK invalid, retrying...")
@@ -114,14 +114,18 @@ def get_local_ip() -> str:
         s.close()
     return ip
 
-def inbound_socket(UID:int, DID:int, keyProduct:list[int]) -> None:
+def inbound_socket(uid:int, did:int, keyProduct:list[int]):
+    regData: dict[str,int|list[int]]
+    plaintextData: dict[str, str]
+    ciphertextData: dict[str, str]
+    
     HOST = get_local_ip()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, 0))
         s.listen()
         PORT = s.getsockname()[-1]
-        requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT})
-        print(f"[Device {DID}] Listener started on {HOST}:{PORT}...")
+        requests.post(f"{SERVER}/announce", params={"uid": uid, "did": did, "ip": HOST, "port": PORT})
+        print(f"[Device {did}] Listener started on {HOST}:{PORT}...")
 
         while True:
             conn, addr = s.accept()
@@ -129,16 +133,16 @@ def inbound_socket(UID:int, DID:int, keyProduct:list[int]) -> None:
                 data = json.loads(conn.recv(1024).decode())
                 deviceMsg  = data["deviceMsg"]
 
-                if deviceMsg == "Register New Device":
-                    data = handle_registration(UID, DID, keyProduct, addr)
-                    regData:dict[str,int|list[int]] = {"DID": data[0], "DK": data[1]}
+                if deviceMsg == "Register New Device":                    
+                    data = handle_registration(uid, did, keyProduct, addr)
+                    regData = {"DID": data[0], "DK": data[1]}
                     conn.sendall(json.dumps(regData).encode())
                     print(f"[Device {data[0]}] Device registration completed.")
                 
                 elif deviceMsg == "Encrypt Data":
                     did = data["DID"]
-                    plaintextData:dict[str, str] = data["StudentData"]
-                    ciphertextData:dict[str, str] = {}
+                    plaintextData = data["StudentData"]
+                    ciphertextData = {}
                     print(f"[Admin Device] Incoming data encryption request from device {did}")
                     regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
                     if regreq_ans == 1:
@@ -151,8 +155,8 @@ def inbound_socket(UID:int, DID:int, keyProduct:list[int]) -> None:
                 
                 elif deviceMsg == "Decrypt Data":
                     did = data["DID"]
-                    ciphertextData:dict[str, str] = data["StudentData"]
-                    plaintextData:dict[str, str] = {}
+                    ciphertextData = data["StudentData"]
+                    plaintextData = {}
                     print(f"[Admin Device] Incoming data decryption request from device {did}")
                     regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
                     if regreq_ans == 1:
@@ -167,7 +171,13 @@ def inbound_socket(UID:int, DID:int, keyProduct:list[int]) -> None:
                 else:
                     print("This functionality has not yet been programmed for.")
 
-def init_reg() -> tuple[int, int, int, list[int], bytes]:
+def init_reg():
+    uid: int
+    did: int
+    dk: int
+    keyproduct: list[int]
+    schoolKey: bytes
+    
     while True:
         print("\nSign Up: Initialise user")
         name = "admin"
@@ -201,7 +211,7 @@ def init_reg() -> tuple[int, int, int, list[int], bytes]:
             schoolKey = schoolKey_int.to_bytes(32, "big")
 
         print(f"[User {uid}] User registration completed.")
-        print(f"Admin device initialised with UID: {uid}, Admin DID: {did}, School Encryption Key {schoolKey_int}.")
+        print(f"User Admin Device initialised with UID: {uid}, Admin DID: {did}, School Encryption Key {schoolKey_int}.")
 
         return uid, did, dk, keyproduct, schoolKey
 

@@ -9,6 +9,7 @@ nameDB: Dict[Tuple[int, int], str] = {}
 indexDataDB: Dict[int, list[int]] = {}
 studentDataDB: Dict[int, str] = {}
 r2_store: Dict[Tuple[int, int], int] = {}
+device_locations: Dict[Tuple[int, int], Tuple[str, int]] = {}
 
 # prime modulus
 P = 29996224275833
@@ -23,6 +24,20 @@ def random_coprime(p_minus_1: int) -> int:
             return r
 
 # models
+class AnnounceRequest(BaseModel):
+    UID: int
+    DID: int
+    ip: str
+    port: int
+
+class DeviceLocationRequest(BaseModel):
+    uid: int
+    did: int
+
+class DeviceLocationResponse(BaseModel):
+    ip: str
+    port: int
+
 class InitRequest(BaseModel):
     unused: int
     name: str = Query(...)
@@ -30,7 +45,13 @@ class InitRequest(BaseModel):
 class InitResponse(BaseModel):
     UID: int
     DID: int
-    name: str
+
+class SuperInitRequest(BaseModel):
+    name: str = Query(...)
+
+class SuperInitResponse(BaseModel):
+    UID: int
+    DID: int
 
 class RegisterRequest(BaseModel):
     uid: int
@@ -38,9 +59,12 @@ class RegisterRequest(BaseModel):
     unused: int
 
 class RegisterResponse(BaseModel):
-    uid: int
     new_did: int
 
+class RevokeListRequest(BaseModel):
+    uid: int = Query(...)
+    did: int = Query(...)
+    
 class RevokeListResponse(BaseModel):
     dids: list[int]
 
@@ -48,6 +72,9 @@ class RevokeRequest(BaseModel):
     uid: int
     did: int
     revoke_did: int
+
+class SuperRevokeRequest(BaseModel):
+    uid: int
 
 class EvalStep1Request(BaseModel):
     uid: int
@@ -91,25 +118,25 @@ class EditStep3Response(BaseModel):
     result: str
 
 # endpoints
-device_locations = {}  # (uid, did) -> (ip, port)
-
 @app.post("/announce")
-def announce(uid: int, did: int, ip: str, port: int) -> dict[str, str]:
-    device_locations[(uid, did)] = (ip, port)
+def announce(req: AnnounceRequest):
+    device_locations[(req.UID, req.DID)] = (req.ip, req.port)
     return {"status": "ok"}
 
-@app.get("/device_location")
-def device_location(uid: int, did: int) -> dict[str, int]:
-    if (uid, did) not in device_locations:
+@app.get("/device_location", response_model = DeviceLocationResponse)
+def device_location(req: DeviceLocationRequest) -> dict[str, int|str]:
+    if (req.uid, req.did) not in device_locations:
         raise HTTPException(status_code=404, detail="Device not found")
-    return {"ip": device_locations[(uid, did)][0], "port": device_locations[(uid, did)][1]}
+    ip = device_locations[(req.uid, req.did)][0]
+    port = device_locations[(req.uid, req.did)][1]
+    return {"ip": ip, "port": port}
 
 @app.get("/config")
 def get_config():
     return {"p": P}
 
 @app.post("/init", response_model=InitResponse)
-def init_device(req: InitRequest) -> dict[str, int|str]:
+def init_device(req: InitRequest):
     constant = random.randint(1, 100000)
     UID = random.randint(10**9, 10**10 - 1)
     DID = random.randint(10**9, 10**10 - 1)
@@ -117,10 +144,17 @@ def init_device(req: InitRequest) -> dict[str, int|str]:
     userConstantDB[(UID, DID)] = constant
     userDataDB[(UID, DID)] = DSK
     nameDB[(UID, DID)] = req.name
-    return {"UID": UID, "DID": DID, "name": req.name}
+    return {"UID": UID, "DID": DID}
+
+@app.post("/super_init", response_model=SuperInitResponse)
+def super_init(req: SuperInitRequest):
+    UID = 1
+    DID = 1
+    nameDB[(UID, DID)] = req.name
+    return {"UID": UID, "DID": DID}
 
 @app.post("/register", response_model=RegisterResponse)
-def register_device(req: RegisterRequest) -> dict[str, int]:
+def register_device(req: RegisterRequest):
     key = (req.uid, req.did)
 
     if key not in userDataDB:
@@ -149,28 +183,28 @@ def register_device(req: RegisterRequest) -> dict[str, int]:
     userDataDB[(req.uid, new_did)] = new_dsk
     userConstantDB[req.uid, new_did] = DSK_constant
 
-    return {"uid": req.uid, "new_did": new_did}
+    return {"new_did": new_did}
 
 @app.get("/revoke_list", response_model=RevokeListResponse)
-def revoke_list(uid: int = Query(...), did: int = Query(...)) -> dict[str, list[int]]:
-    key = (uid, did)
+def revoke_list(req: RevokeListRequest):
+    key = (req.uid, req.did)
     if key not in userDataDB:
         raise HTTPException(status_code=400, detail="Current device not registered")
     if userDataDB[key] is None:
         raise HTTPException(status_code=403, detail="Current device has been revoked")
 
-    dids = [d for (u, d), dsk in userDataDB.items() if u == uid and dsk is not None]
-    return {"dids": dids}
+    dids = [d for (u, d), dsk in userDataDB.items() if u == req.uid and dsk is not None]
+    return {"DIDs": dids}
 
 @app.post("/revoke")
-def revoke(req: RevokeRequest) -> dict[str, str]:
-
+def revoke(req: RevokeRequest):
     current = (req.uid, req.did)
-    target = (req.uid, req.revoke_did)
     if current not in userDataDB:
         raise HTTPException(status_code=400, detail="Current device not registered")
     elif userDataDB[current] is None:
         raise HTTPException(status_code=403, detail="Current device has been revoked")
+    
+    target = (req.uid, req.revoke_did)
     if target not in userDataDB:
         raise HTTPException(status_code=404, detail="Target device not found")
     elif userDataDB[target] is None:
@@ -179,8 +213,15 @@ def revoke(req: RevokeRequest) -> dict[str, str]:
     userDataDB[target] = None
     return {"Status": "Revocation Completed"}
 
+@app.post("/super_revoke")
+def super_revoke(req: SuperRevokeRequest):
+    for (k,_) in userDataDB.items():
+        if k[0] == req.uid:
+            userDataDB[k] = None
+    return {"Status": "Revocation Completed"}
+    
 @app.post("/eval/step1", response_model=EvalStep1Response)
-def eval_step1(req: EvalStep1Request) -> dict[str, int]:
+def eval_step1(req: EvalStep1Request):
     key = (req.uid, req.did)
     if key not in userDataDB:
         raise HTTPException(status_code=400, detail="Current device not registered")
@@ -191,25 +232,24 @@ def eval_step1(req: EvalStep1Request) -> dict[str, int]:
 
     r2 = random_coprime(P - 1)
     r2_store[key] = r2
-
     blinded2 = pow(req.blinded, DSK * r2, P)
-    
     return {"blinded2": blinded2}
 
 @app.post("/eval/step2", response_model=EvalStep2Response)
-def eval_step2(req: EvalStep2Request) -> dict[str, dict[int, str]]:
+def eval_step2(req: EvalStep2Request):
     key = (req.uid, req.did)
     if key not in r2_store:
         raise HTTPException(status_code=400, detail="No pending evaluation for this device")
+    
     r2 = r2_store.pop(key)
-
     r2_inv = pow(r2, -1, P - 1)
     final_value:int = pow(req.unblinded1, r2_inv, P)
+    
     if final_value not in indexDataDB:
         raise HTTPException(status_code=400, detail="Encrypted Index not found in this server.")
     
     DataID = indexDataDB[final_value]
-    query_result = {}
+    query_result:dict[int, str] = {}
     
     for ID in DataID:
         intID = int(ID)
@@ -221,7 +261,7 @@ def eval_step2(req: EvalStep2Request) -> dict[str, dict[int, str]]:
     return {"query_result": query_result}
     
 @app.post("/edit/step1", response_model=EditStep1Response)
-def edit_step1(req: EditStep1Request) -> dict[str, list[int]]:
+def edit_step1(req: EditStep1Request):
     newDataIDList:list[int] = []
     for DataID,Data in req.SData.items():
         DataID = int(DataID)
@@ -235,7 +275,7 @@ def edit_step1(req: EditStep1Request) -> dict[str, list[int]]:
     return {"newDataIDList": newDataIDList}
 
 @app.post("/edit/step2", response_model=EditStep2Response)
-def edit_step2(req: EditStep2Request) -> dict[str, int]:
+def edit_step2(req: EditStep2Request):
     key = (req.uid, req.did)
     if key not in userDataDB:
         raise HTTPException(status_code=400, detail="Current device not registered")
@@ -252,12 +292,12 @@ def edit_step2(req: EditStep2Request) -> dict[str, int]:
     return {"blinded2": blinded2}
 
 @app.post("/edit/step3", response_model=EditStep3Response)
-def edit_step3(req: EditStep3Request) -> dict[str, str]:
+def edit_step3(req: EditStep3Request):
     key = (req.uid, req.did)
     if key not in r2_store:
         raise HTTPException(status_code=400, detail="No pending evaluation for this device")
+    
     r2 = r2_store.pop(key)
-
     r2_inv = pow(r2, -1, P - 1)
     final_value = pow(req.unblinded1, r2_inv, P)
     intDataID = [int(id) for id in req.DataID]
@@ -278,5 +318,5 @@ def edit_step3(req: EditStep3Request) -> dict[str, str]:
 
     return{"result": "successful"}
 
-if __name__ == "__main__":
+def start_server():
     uvicorn.run(app, host="0.0.0.0", port=8000)
