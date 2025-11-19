@@ -1,4 +1,5 @@
 import requests, random, math, hashlib, socket, sys, threading, time, subprocess, tempfile, os, json, ast
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from primePy import primes
 
 SERVER = "http://127.0.0.1:8000"
@@ -33,6 +34,17 @@ def keyDev():
             unused *= keyproduct[i]
 
     return base, unused, keyproduct
+
+# def encryptMessage(schoolKey, plainText, aad=b""):
+#     nonce = os.urandom(12)
+#     aesgcm = AESGCM(schoolKey)
+#     ciphertext = aesgcm.encrypt(nonce, plainText, aad)
+#     return nonce, ciphertext
+
+# def decryptMessage(schoolKey, nonce, cipherText, aad=b""):
+#     aesgcm = AESGCM(schoolKey)
+#     plaintext = aesgcm.decrypt(nonce, cipherText, aad)
+#     return plaintext
 
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -197,57 +209,83 @@ def fn_selection(UID, DID, DK):
             print(revoke)
         
         elif choice == 2:
-            index = int(input("Enter a student data query: "))
-            hashed_index = hash_int(index) % p
-            r1 = random_coprime(p - 1)
+            print("You can query in 3 ways:")
+            print("1. Single query: results that satisfy the given condition")
+            print("2. AND query: only results that satisfy all given conditions")
+            print("3. OR query: results that satisfy at least one given condition (i.e. multiple discrete single queries)")
+            queryType = int(input("Enter your choice (1/2/3): "))
+            
+            queryResult = {}
 
-            blinded = pow(hashed_index, DK * r1, p)
+            indexes = [index.strip() for index in input("Enter student data quer(ies) separated by commas: ").split(",")]
+            for index in indexes:
+                intIndex = int(index)
+                hashed_index = hash_int(intIndex) % p
+                r1 = random_coprime(p - 1)
+
+                blinded = pow(hashed_index, DK * r1, p)
+
+                try:
+                    resp1 = requests.post(f"{SERVER}/eval/step1", json={"uid": UID, "did": DID, "blinded": blinded})
+                    resp1.raise_for_status()
+                except requests.exceptions.HTTPError as e:
+                    print("Step 1 failed:", e.response.json()["detail"])
+                    input("Press Enter to continue...")
+                    return
+                try:
+                    blinded2 = resp1.json()["blinded2"]
+                except KeyError:
+                    print("Unexpected response from server:", resp1.json())
+                    input("Press Enter to continue...")
+                    return
+
+                r1_inv = pow(r1, -1, p - 1)
+                unblinded1 = pow(blinded2, r1_inv, p)
+
+                try:
+                    resp2 = requests.post(f"{SERVER}/eval/step2", json={"uid": UID, "did": DID, "unblinded1": unblinded1}).json()
+                    tempQueryResult = resp2["query_result"]
+                except requests.exceptions.HTTPError as e:
+                    print("Step 2 failed:", e.response.json()["detail"])
+                    input("Press Enter to continue...")
+                    return
+                
+                if queryType in (1,3):
+                        queryResult = queryResult|tempQueryResult
+                elif queryType == 2:
+                    if not queryResult:
+                        queryResult = tempQueryResult
+                    else:
+                        queryResult = {int(k):tempQueryResult[k] for k in queryResult if k in tempQueryResult}
+        
+            print(f"Student Data: {queryResult}")
+
+        elif choice == 3:
+            dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
+            SData = ast.literal_eval(input("Enter student data in the format {DataID1:'Student Data 1', DataID2:'Student Data 2'}. Input any integer for DataID if inputting data for new students: "))
+            # for DataID, studentData in SData:
+            #     SData[DataID] = encryptMessage(SKey, studentData, aad)
 
             try:
-                resp1 = requests.post(
-                    f"{SERVER}/eval/step1",
-                    json={"uid": UID, "did": DID, "blinded": blinded}
-                )
+                resp1 = requests.post(f"{SERVER}/edit/step1", json={"dataEntryType": dataEntryType, "SData": SData})
                 resp1.raise_for_status()
             except requests.exceptions.HTTPError as e:
                 print("Step 1 failed:", e.response.json()["detail"])
                 input("Press Enter to continue...")
                 return
-            try:
-                blinded2 = resp1.json()["blinded2"]
-            except KeyError:
-                print("Unexpected response from server:", resp1.json())
-                input("Press Enter to continue...")
-                return
-
-            r1_inv = pow(r1, -1, p - 1)
-            unblinded1 = pow(blinded2, r1_inv, p)
-
-            try:
-                resp2 = requests.post(f"{SERVER}/eval/step2", json={"uid": UID, "did": DID, "unblinded1": unblinded1}).json()
-                print("Student Data: ", resp2["query_result"])
-            except requests.exceptions.HTTPError as e:
-                print("Step 2 failed:", e.response.json()["detail"])
-                input("Press Enter to continue...")
-                return
-        
-        elif choice == 3:
-            dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
-            SData = ast.literal_eval(input("Enter student data in the format {DataID1:'Student Data 1', DataID2:'Student Data 2'}. Input any integer for DataID if inputting new data: "))
             
             try:
-                resp1 = requests.post(f"{SERVER}/edit/step1", json={"dataEntryType": dataEntryType, "SData": SData}).json()
-            except requests.exceptions.HTTPError as e:
-                print("Step 1 failed:", e.response.json()["detail"])
+                newDataIDList = resp1.json()["newDataIDList"]
+            except KeyError:
+                print("Unexpected response from server:", resp1.json())
                 input("Press Enter to continue...")
                 return
             
             print("Student database successfully edited ")
             if dataEntryType == 1: # if new student data is added
-                print("with the following new DataIDs: ", resp1["newDataIDList"])
+                print(f"with the following new DataIDs: {newDataIDList}")
             
-
-            print("===== Encrypted Index Database Editing =====")
+            print("\n===== Encrypted Index Database Editing =====")
             entries = int(input("Enter the number of index(es) you would like to edit: "))
             for i in range(entries):
                 index = int(input("Enter an index to add or edit: "))
