@@ -1,20 +1,19 @@
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
-import hashlib, random, os, sys, subprocess, socket, json, requests, threading, time
+from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
+import hashlib, os, sys, subprocess, socket, json, requests, threading, time
 
 SERVER = "http://172.22.22.27:8000"
 UID = 1
 DID = 1
 
 def masterKeyDev():
-    masterKey = random.randint(10**9, 10**10-1)
+    masterKey = AESGCMSIV.generate_key(bit_length=256)
     return masterKey
 
-def schoolKeyDev(masterKey, UID, DID):
+def schoolKeyDev(masterKey, UID, DID) -> bytes:
     salt = hashlib.sha256(f"{UID}{DID}".encode()).digest()
-    masterKey_bytes = masterKey.to_bytes(8, "big")
-    schoolKey_bytes = HKDF(algorithm = hashes.SHA256(), length = 32, salt = salt, info = b"").derive(masterKey_bytes)
-    schoolKey = int.from_bytes(schoolKey_bytes, "big")
+    schoolKey = HKDF(algorithm = hashes.SHA256(), length = 32, salt = salt, info = b"").derive(masterKey)
     return schoolKey
 
 def runServer():
@@ -50,7 +49,8 @@ def inbound_socket(UID, DID, masterKey):
                 data = json.loads(conn.recv(1024).decode())
                 deviceMsg, uid, did = data["deviceMsg"], data["UID"], data["DID"]
                 if deviceMsg == "Obtain school encryption key":
-                    schoolKey = schoolKeyDev(masterKey, uid, did)
+                    schoolKey_bytes = schoolKeyDev(masterKey, uid, did)
+                    schoolKey = int.from_bytes(schoolKey_bytes, "big")
                     data_to_send = json.dumps(schoolKey)
                     conn.sendall(data_to_send.encode())
                     print(f"[User {uid}] User registration completed.")

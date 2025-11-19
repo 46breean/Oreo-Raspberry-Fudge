@@ -56,18 +56,19 @@ def init_reg():
                 params={"uid": uid, "did": admin_did}
             )
             loc.raise_for_status()
-            referral_info = loc.json()
-            referral_ip = referral_info["ip"]
-            referral_port = referral_info["port"]
+            admin_info = loc.json()
+            admin_ip = admin_info["ip"]
+            admin_port = admin_info["port"]
         except requests.exceptions.HTTPError as e:
-            print("Could not find referral device:", e.response.json()["detail"])
+            print("Could not find admin device:", e.response.json()["detail"])
             sys.exit(1)
 
         # connect to admin device
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            print(f"Connecting to referral device at {referral_ip}:{referral_port}...")
-            s.connect((referral_ip, referral_port))
-            s.sendall(b"Registration Request")
+            print(f"Connecting to admin device at {admin_ip}:{admin_port}...")
+            s.connect((admin_ip, admin_port))
+            data = {"deviceMsg": "Register New Device"}
+            s.sendall(json.dumps(data).encode())
             admin_reply = s.recv(4096).decode()
             if admin_reply == b"REJECTED":
                 print("Registration Request Rejected")
@@ -81,12 +82,11 @@ def init_reg():
                     data["keyproduct"]
                 )
                 did, dk, unused, keyproduct = int(did), int(dk), int(unused), list(keyproduct)
-                print(f"[Device {DID}] Device registration completed")
+                print(f"[Device {did}] Device registration completed")
 
-        return uid, did, dk
+        return uid, did, admin_did, dk, admin_ip, admin_port
 
 def fn_selection(UID, DID, DK):
-
     while True:
         print("\nDevice Menu:")
         print("1. Revoke device")
@@ -107,9 +107,7 @@ def fn_selection(UID, DID, DK):
                 sys.exit(1)
             
             print(f"DIDs of registered, not yet revoked devices: {revoke_list.json()}")
-
             revoke_did = int(input("Select DID to revoke:"))
-
             revoke = requests.post(
                 f"{SERVER}/revoke",
                 json={"uid": UID, "did": DID, "revoke_did": revoke_did}
@@ -120,7 +118,6 @@ def fn_selection(UID, DID, DK):
             index = int(input("Enter a student data query: "))
             hashed_index = hash_int(index) % p
             r1 = random_coprime(p - 1)
-
             blinded = pow(hashed_index, DK * r1, p)
 
             try:
@@ -145,16 +142,42 @@ def fn_selection(UID, DID, DK):
 
             try:
                 resp2 = requests.post(f"{SERVER}/eval/step2", json={"uid": UID, "did": DID, "unblinded1": unblinded1}).json()
-                print("Student Data: ", resp2["query_result"])
+                SData = resp2["query_result"]
             except requests.exceptions.HTTPError as e:
                 print("Step 2 failed:", e.response.json()["detail"])
                 input("Press Enter to continue...")
                 return
+            
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                print(f"Connecting to admin device at {adminIP}:{adminPort}...")
+                s.connect((adminIP, adminPort))
+                data = {"deviceMsg": "Decrypt Data", "DID": DID, "StudentData": SData}
+                s.sendall(json.dumps(data).encode())
+                SData = json.loads(s.recv(4096).decode())
+                if SData == b"REJECTED":
+                    print("Decryption Request Rejected.")
+                else:
+                    for DataID, Data in SData.items():
+                        SData[int(DataID)] = Data
+                    print("Student Data: ", SData)
         
         elif choice == 3:
             dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
             SData = ast.literal_eval(input("Enter student data in the format {DataID1:'Student Data 1', DataID2:'Student Data 2'}. Input any integer for DataID if inputting new data: "))
             
+            # connect to admin device
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                print(f"Connecting to admin device at {adminIP}:{adminPort}...")
+                s.connect((adminIP, adminPort))
+                data = {"deviceMsg": "Encrypt Data", "DID": DID, "StudentData": SData}
+                s.sendall(json.dumps(data).encode())
+                SData = json.loads(s.recv(4096).decode())
+                if SData == b"REJECTED":
+                    print("Encryption Request Rejected. Press Enter to continue...")
+                    return
+                else:
+                    print("Encryption successful.")
+
             try:
                 resp1 = requests.post(f"{SERVER}/edit/step1", json={"dataEntryType": dataEntryType, "SData": SData}).json()
             except requests.exceptions.HTTPError as e:
@@ -166,7 +189,6 @@ def fn_selection(UID, DID, DK):
             if dataEntryType == 1: # if new student data is added
                 print("with the following new DataIDs: ", resp1["newDataIDList"])
             
-
             print("===== Encrypted Index Database Editing =====")
             entries = int(input("Enter the number of index(es) you would like to edit: "))
             for i in range(entries):
@@ -216,5 +238,5 @@ def fn_selection(UID, DID, DK):
 p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729)
 
-UID, DID, DK = init_reg()
+UID, DID, adminDID, DK, adminIP, adminPort = init_reg()
 fn_selection(UID, DID, DK)

@@ -1,5 +1,7 @@
-import requests, random, math, hashlib, socket, sys, threading, time, tempfile, os, json, ast
 from primePy import primes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
+import requests, random, math, hashlib, socket, sys, threading, json, base64
+
 
 SERVER = "http://172.22.22.27:8000"
 
@@ -53,8 +55,8 @@ def regKeyDev(keyproduct):
     return base, unused
 
 def handle_registration(UID, DID, keyproduct, addr):
-    print(f"[Device {DID}] Incoming registration request from {addr}")
-    regreq_ans = int(input("Type 1 to accept request, press any other key to reject request: "))
+    print(f"[Admin Device] Incoming registration request from {addr}")
+    regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
 
     if regreq_ans == 1:
         while True:
@@ -89,6 +91,20 @@ def handle_registration(UID, DID, keyproduct, addr):
 
     return data
 
+def encryptData(Data:str, schoolKey:bytes) -> str:
+    aes = AESGCMSIV(schoolKey)
+    nonce = b"\x00"*12
+    plaintext = Data.encode("utf-8")
+    ciphertext = aes.encrypt(nonce, plaintext, None)
+    return base64.b64encode(ciphertext).decode("utf-8")
+
+def decryptData(Data:str, schoolKey:bytes) -> str:
+    aes = AESGCMSIV(schoolKey)
+    nonce = b"\x00"*12
+    ciphertext = base64.b64decode(Data)
+    plaintext = aes.decrypt(nonce, ciphertext, None)
+    return plaintext.decode("utf-8")
+
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -114,22 +130,45 @@ def inbound_socket(UID, DID, keyProduct):
         while True:
             conn, addr = s.accept()
             with conn:
-                deviceMsg = conn.recv(1024).decode()
-                if deviceMsg == "Registration Request":
+                data = json.loads(conn.recv(1024).decode())
+                deviceMsg  = data["deviceMsg"]
+
+                if deviceMsg == "Register New Device":
                     data = handle_registration(UID, DID, keyProduct, addr)
                     regData = {"DID": data[0], "DK": data[1], "unused": data[2]}
                     regData["keyproduct"] = keyProduct
-                    data_to_send = json.dumps(regData)
-
-                    conn.sendall(data_to_send.encode())
-
+                    conn.sendall(json.dumps(regData).encode())
                     print(f"[Device {data[0]}] Device registration completed.")
-                elif deviceMsg == "encryptData":
-                    pass
-                elif deviceMsg == "decryptData":
-                    pass
+                
+                elif deviceMsg == "Encrypt Data":
+                    did = data["DID"]
+                    SData:dict = data["StudentData"]
+                    print(f"[Admin Device] Incoming data encryption request from device {did}")
+                    regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
+                    if regreq_ans == 1:
+                        for DataID, Data in SData.items():
+                            SData[DataID] = encryptData(Data, schoolKey)
+                    else:
+                        data = b"REJECTED"
+                    print("Encryption successful.")
+                    conn.sendall(json.dumps(SData).encode())
+                
+                elif deviceMsg == "Decrypt Data":
+                    did = data["DID"]
+                    SData:dict = data["StudentData"]
+                    print(f"[Admin Device] Incoming data decryption request from device {did}")
+                    regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
+                    if regreq_ans == 1:
+                        for DataID, Data in SData.items():
+                            print(Data)
+                            SData[DataID] = decryptData(Data, schoolKey)
+                    else:
+                        data = b"REJECTED"
+                    print("Decryption successful.")
+                    conn.sendall(json.dumps(SData).encode())
+                
                 else:
-                    print("This functionality has not been programmed for.")
+                    print("This functionality has not yet been programmed for.")
 
 def init_reg():
     while True:
@@ -161,11 +200,11 @@ def init_reg():
             s.connect((referral_ip, referral_port))
             data = json.dumps({"deviceMsg": "Obtain school encryption key", "UID": uid, "DID":did}).encode()
             s.sendall(data)
-            admin_reply = s.recv(4096).decode()
-            schoolKey = int(json.loads(admin_reply))
+            schoolKey_int = int(json.loads(s.recv(4096).decode()))
+            schoolKey = schoolKey_int.to_bytes(32, "big")
 
         print(f"[User {uid}] User registration completed.")
-        print(f"Admin device initialised with UID: {uid}, Admin DID: {did}, School Encryption Key {schoolKey}.")
+        print(f"Admin device initialised with UID: {uid}, Admin DID: {did}, School Encryption Key {schoolKey_int}.")
 
         return uid, did, dk, keyproduct, schoolKey
 
