@@ -1,8 +1,7 @@
-import requests, random, math, hashlib, socket, sys, threading, time, subprocess, tempfile, os, json, ast
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+import requests, random, math, hashlib, socket, sys, json, ast
 from primePy import primes
 
-SERVER = "http://127.0.0.1:8000"
+SERVER = "http://172.22.22.27:8000"
 
 def hash_int(x: int) -> int:
     m = hashlib.sha256()
@@ -55,130 +54,44 @@ def get_local_ip():
         s.close()
     return ip
 
-
-def inbound_socket(UID, DID, keyproduct):
-
-    HOST = get_local_ip()
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, 0))
-        s.listen()
-
-        PORT = s.getsockname()[-1]
-        requests.post(f"{SERVER}/announce", params={"uid": UID, "did": DID, "ip": HOST, "port": PORT})
-
-        print(f"[Device {DID}] Listener started on {HOST}:{PORT}...")
-
-        while True:
-            conn, addr = s.accept()
-            with conn:
-                newdev_msg = conn.recv(1024).decode()
-                if not newdev_msg:
-                    continue
-
-                tmp = tempfile.NamedTemporaryFile(delete=False)
-                tmp_path = tmp.name
-                tmp.close()
-
-                subprocess.Popen([
-                    "start", "cmd", "/c",
-                    sys.executable, "registration.py",
-                    str(UID), str(DID),
-                    str(addr),
-                    newdev_msg,
-                    str(keyproduct), str(tmp_path)
-                ], shell=True)
-
-                while not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
-                    time.sleep(0.2)
-
-                with open(tmp_path, "r") as f:
-                    data = json.load(f)
-
-                os.remove(tmp_path)
-
-                data = {"DID": data[0], "DK": data[1], "unused": data[2]}
-                data["keyproduct"] = keyproduct
-                data_to_send = json.dumps(data)
-
-                conn.sendall(data_to_send.encode())
-
 def init_reg():
-    
     while True:
+        print("\nSign Up: Register new device")
+
+        uid = int(input("Enter your UID: "))
+        admin_did = int(input("Enter your admin DID: "))
 
         try:
+            loc = requests.get(
+                f"{SERVER}/device_location",
+                params={"uid": uid, "did": admin_did}
+            )
+            loc.raise_for_status()
+            admin_info = loc.json()
+            admin_ip = admin_info["ip"]
+            admin_port = admin_info["port"]
+        except requests.exceptions.HTTPError as e:
+            print("Could not find admin device:", e.response.json()["detail"])
+            sys.exit(1)
 
-            print("\nSign Up:")
-            print("1. Initialise user")
-            print("2. Register new device")
-            choice = int(input("Select function: "))
+        # connect to admin device
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            print(f"Connecting to admin device at {admin_ip}:{admin_port}...")
+            s.connect((admin_ip, admin_port))
+            data = {"deviceMsg": "Register New Device"}
+            s.sendall(json.dumps(data).encode())
+            admin_reply = s.recv(4096).decode()
+            if admin_reply == "REJECTED":
+                print("Registration Request Rejected")
+                sys.exit()
+            else:
+                data = json.loads(admin_reply)
+                did, dk = int(data["DID"]), int(data["DK"])
+                print(f"[Device {did}] Device registration completed")
 
-            if choice == 1:
-                name = input("Enter device name: ")
-                dk, unused, keyproduct = keyDev()
-                init = requests.post(f"{SERVER}/init", params={"name": name, "unused": unused}).json()
-                uid, did = init["UID"], init["DID"]
-                print("Initialised:", init)
+        return uid, did, admin_did, dk, admin_ip, admin_port
 
-                print (f"UID: {uid}")
-
-                #start listener
-                listener_thread = threading.Thread(target=inbound_socket, args=(uid, did, keyproduct), daemon=True)
-                listener_thread.start()
-                time.sleep(0.5) 
-
-                return uid, did, dk
-
-            elif choice == 2:
-                uid = input("Enter your UID: ")
-                referral_did = input("Enter the DID of your referral device: ")
-
-                try:
-                    loc = requests.get(
-                        f"{SERVER}/device_location",
-                        params={"uid": uid, "did": referral_did}
-                    )
-                    loc.raise_for_status()
-                    referral_info = loc.json()
-                    referral_ip = referral_info["ip"]
-                    referral_port = referral_info["port"]
-                except requests.exceptions.HTTPError as e:
-                    print("Could not find referral device:", e.response.json()["detail"])
-                    sys.exit(1)
-
-                # connect to referral device
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    print(f"Connecting to referral device at {referral_ip}:{referral_port}...")
-                    s.connect((referral_ip, referral_port))
-                    s.sendall(b"Registration Request")
-                    newdev_msg = s.recv(4096).decode()
-                    if newdev_msg == b"REJECTED":
-                        print("Registration Request Rejected")
-                        sys.exit()
-                    else:
-                        data = json.loads(newdev_msg)
-                        did, dk, unused, keyproduct = (
-                            data["DID"],
-                            data["DK"],
-                            data["unused"],
-                            data["keyproduct"]
-                        )
-                        did, dk, unused, keyproduct = int(did), int(dk), int(unused), list(keyproduct)
-                    
-                #start listener
-                listener_thread = threading.Thread(target=inbound_socket, args=(uid, did, keyproduct), daemon=True)
-                listener_thread.start()
-                time.sleep(0.5) 
-
-                return uid, did, dk
-            
-        except ValueError:
-            print("Invalid input. Please try again.")
-            continue  
-
-def fn_selection(UID, DID, DK):
-
+def fn_selection(UID:int, DID:int, DK:int):
     while True:
         print("\nDevice Menu:")
         print("1. Revoke device")
@@ -186,6 +99,7 @@ def fn_selection(UID, DID, DK):
         print("3. Edit Database")
         print("4. Exit")
         choice = int(input("Select function: "))
+        global p
 
         if choice == 1:
             try:
@@ -199,9 +113,7 @@ def fn_selection(UID, DID, DK):
                 sys.exit(1)
             
             print(f"DIDs of registered, not yet revoked devices: {revoke_list.json()}")
-
             revoke_did = int(input("Select DID to revoke:"))
-
             revoke = requests.post(
                 f"{SERVER}/revoke",
                 json={"uid": UID, "did": DID, "revoke_did": revoke_did}
@@ -250,20 +162,45 @@ def fn_selection(UID, DID, DK):
                     input("Press Enter to continue...")
                     return
                 
-                if queryType in (1,3):
+                if queryType == 1 or queryType == 3:
                         queryResult = queryResult|tempQueryResult
                 elif queryType == 2:
                     if not queryResult:
                         queryResult = tempQueryResult
                     else:
-                        queryResult = {int(k):tempQueryResult[k] for k in queryResult if k in tempQueryResult}
+                        queryResult = {k:tempQueryResult[k] for k in queryResult if k in tempQueryResult}
+            
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                print(f"Connecting to admin device at {adminIP}:{adminPort}...")
+                s.connect((adminIP, adminPort))
+                data:dict[str, str|int|dict[str, str]] = {"deviceMsg": "Decrypt Data", "DID": DID, "StudentData": queryResult}
+                s.sendall(json.dumps(data).encode())
+                SData = json.loads(s.recv(4096).decode())
+                if SData == b"REJECTED":
+                    print("Decryption Request Rejected.")
+                else:
+                    for DataID, Data in SData.items():
+                        SData[int(DataID)] = Data
         
-            print(f"Student Data: {queryResult}")
+            print(f"Student Data: \n{SData}")
 
         elif choice == 3:
             dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
             SData = ast.literal_eval(input("Enter student data in the format {DataID1:'Student Data 1', DataID2:'Student Data 2'}. Input any integer for DataID if inputting new data: "))
             
+            # connect to admin device
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                print(f"Connecting to admin device at {adminIP}:{adminPort}...")
+                s.connect((adminIP, adminPort))
+                data = {"deviceMsg": "Encrypt Data", "DID": DID, "StudentData": SData}
+                s.sendall(json.dumps(data).encode())
+                SData = json.loads(s.recv(4096).decode())
+                if SData == b"REJECTED":
+                    print("Encryption Request Rejected. Press Enter to continue...")
+                    return
+                else:
+                    print("Encryption successful.")
+
             try:
                 resp1 = requests.post(f"{SERVER}/edit/step1", json={"dataEntryType": dataEntryType, "SData": SData})
                 resp1.raise_for_status()
@@ -285,7 +222,7 @@ def fn_selection(UID, DID, DK):
             
             print("\n===== Encrypted Index Database Editing =====")
             entries = int(input("Enter the number of index(es) you would like to edit: "))
-            for i in range(entries):
+            for _ in range(entries):
                 index = int(input("Enter an index to add or edit: "))
                 hashed_index = hash_int(index) % p
                 r1 = random_coprime(p - 1)
@@ -329,8 +266,8 @@ def fn_selection(UID, DID, DK):
         else:
                 print("Invalid choice.")
 
-p = requests.get(f"{SERVER}/config").json()["p"]
-primeList = primes.upto(104729)
+p:int = requests.get(f"{SERVER}/config").json()["p"]
+primeList:list[int] = primes.upto(104729)
 
-UID, DID, DK = init_reg()
+UID, DID, adminDID, DK, adminIP, adminPort = init_reg()
 fn_selection(UID, DID, DK)
