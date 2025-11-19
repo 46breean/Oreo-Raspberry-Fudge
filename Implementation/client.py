@@ -262,10 +262,8 @@ def fn_selection(UID, DID, DK):
 
         elif choice == 3:
             dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
-            SData = ast.literal_eval(input("Enter student data in the format {DataID1:'Student Data 1', DataID2:'Student Data 2'}. Input any integer for DataID if inputting data for new students: "))
-            # for DataID, studentData in SData:
-            #     SData[DataID] = encryptMessage(SKey, studentData, aad)
-
+            SData = ast.literal_eval(input("Enter student data in the format {DataID1:'Student Data 1', DataID2:'Student Data 2'}. Input any integer for DataID if inputting new data: "))
+            
             try:
                 resp1 = requests.post(f"{SERVER}/edit/step1", json={"dataEntryType": dataEntryType, "SData": SData})
                 resp1.raise_for_status()
