@@ -28,16 +28,16 @@ class AbstractDevice(ABC):
         self.deviceKey = dsa.generate_private_key(key_size=2048)
         self.unsignedCert = self.deviceKey.public_key()
         self.deviceCertSignature = user.generateDeviceCert(self)
-        server.deviceRegistration(self,user)
 
     @abstractmethod
     def revokeDevice(self,server):
         pass
 
 class AbstractServer(ABC):
-    def __init__(self, schoolCertDB, schoolDeviceDB):
+    def __init__(self, schoolCertDB,schoolDB,deviceDB):
         self.schoolCertDB = schoolCertDB
-        self.schoolDeviceDB = schoolDeviceDB
+        self.schoolDB = schoolDB
+        self.deviceDB = deviceDB
 
     @abstractmethod
     def deviceRegistration(self,user,device):
@@ -61,61 +61,83 @@ class Device(AbstractDevice): #teacher
     def __init__(self,name,user:AbstractUser):
         super().__init__(name,user)
 
-    def revokeDevice(self,server:AbstractServer,user:AbstractUser,device:AbstractDevice,targetSchool:AbstractUser,targetDevice:AbstractDevice,targetSchoolName:str,targetDeviceName:str):
-        message = self.deviceKey.sign(f"Revoke {targetDeviceName} from {targetSchoolName}".encode(),hashes.SHA256())
-        server.deviceRevocation(message,self.deviceCertSignature,user,device,targetSchool,targetDevice,targetSchoolName,targetDeviceName)
+    def revokeDevice(self,server:AbstractServer,user:AbstractUser,device:AbstractDevice,schoolName:str,targetDeviceName:str):
+        message = self.deviceKey.sign(f"Revoke {targetDeviceName} from {schoolName}".encode(),hashes.SHA256())
+        server.deviceRevocation(message,self.deviceCertSignature,user,device,targetDeviceName)
 
 class Server(AbstractServer):
-    def __init__(self,schoolCertDB,schoolDeviceDB):
-        super().__init__(schoolCertDB,schoolDeviceDB)
+    def __init__(self,schoolCertDB,schoolDB,deviceDB):
+        super().__init__(schoolCertDB,schoolDB,deviceDB)
 
-    def deviceRegistration(self,user:AbstractUser,device:AbstractDevice):
-        self.schoolCertDB[user.UID] = user.schoolCert
-        self.schoolDeviceDB[user.UID] = device.DID
+    def deviceRegistration(self,schoolName:str,deviceName:str):
+        registeredSchools = schoolDB.keys()
+        if schoolName not in registeredSchools:
+            user = User(schoolName)
+            self.schoolDB[schoolName] = user
+            device = Device(deviceName,user)
+            self.schoolCertDB[user.UID] = user.schoolCert
+        else:
+            user = self.schoolDB[schoolName]
+            device = Device(deviceName,user)
+        deviceDB[(schoolName,deviceName)] = device
 
-    def deviceRevocation(self, message, certSignature, user:AbstractUser, device:AbstractDevice, targetSchool:AbstractUser, targetDevice:AbstractDevice,targetSchoolName,targetDeviceName):
-        schoolCert:dsa.DSAPublicKey = self.schoolCertDB[user.UID] 
-        targetSchoolCert:dsa.DSAPublicKey = self.schoolCertDB[targetSchool.UID]
+    def deviceRevocation(self, message, certSignature, user:AbstractUser, device:AbstractDevice, targetDeviceName:str):
         try: #check valid device certificate
+            schoolCert=schoolCertDB[user.UID]
             unsignedCertBytes = device.unsignedCert.public_bytes(encoding=serialization.Encoding.PEM,format=serialization.PublicFormat.SubjectPublicKeyInfo)
             schoolCert.verify(certSignature,unsignedCertBytes,hashes.SHA256())
         except InvalidSignature:
             print("Device certificate is invalid. Revocation unauthorised.")
             return
         try: #check valid signature
-            device.unsignedCert.verify(message,f"Revoke {targetDeviceName} from {targetSchoolName}".encode(),hashes.SHA256())
+            device.unsignedCert.verify(message,f"Revoke {targetDeviceName} from {user.schoolName}".encode(),hashes.SHA256())
             print("Valid user, revocation authorised.")
         except InvalidSignature:
             print("Signature is invalid. Revocation unauthorised.")
             return
 
-schoolCertDB = {}
-schoolDeviceDB = {}
+schoolCertDB = {} #stores the public keys for each school
+schoolDB = {} #maps all schools to their schoolName
+deviceDB = {} #maps all devices to their (schoolName, deviceName)
 
-server = Server(schoolCertDB,schoolDeviceDB)
+server = Server(schoolCertDB,schoolDB,deviceDB)
 
 run = True
 
 while run==True:
-    choice = int(input("1 to register a new device, 2 to revoke a device, 3 to exit: "))
-    if choice == 1:
+    choice = input("1 to register a new device, 2 to revoke a device, 3 to exit: ")
+    if choice == "1":
         schoolName = input("School name: ")
         deviceName = input("Device name: ")
-        school = User(schoolName)
-        device = Device(deviceName,school)
+        server.deviceRegistration(schoolName, deviceName)
+        device = deviceDB[(schoolName, deviceName)]
         print("Device Cert: ", device.deviceCertSignature)
-    elif choice == 2:
+        continue
+    elif choice == "2":
         schoolName = input("School name: ")
         deviceName = input("Device name: ")
-        targetSchoolName = input("Target School name: ")
+        try:
+            user = schoolDB[schoolName]
+        except KeyError:
+            print("This school does not have any registered devices.")
+            continue
+        try:
+            device = deviceDB[(schoolName,deviceName)]
+        except KeyError:
+            print("This device is not registered under the school.")
+            continue
         targetDeviceName = input("Target Device name: ")
-        user = User(schoolName)
-        device = Device(deviceName,user)
-        targetUser = User(targetSchoolName)
-        targetDevice = Device(targetDeviceName,targetUser)
-        print(device.revokeDevice(server,user,device,targetUser,targetDevice,targetSchoolName,targetDeviceName))
-    elif choice == 3:
+        try:
+            targetDevice = deviceDB[(schoolName,targetDeviceName)]
+        except KeyError:
+            print("The target device is not under the same school as this device. Revocation unauthorised.")
+            continue
+        message = f"Revoke {targetDeviceName} from {schoolName}".encode(),hashes.SHA256()
+        print(device.revokeDevice(server,user,device,schoolName,targetDeviceName))
+        continue
+    elif choice == "3":
         run = False
+        continue
     else:
-        print("Error")
-     
+        print("Invalid input, please try again.")
+        continue
