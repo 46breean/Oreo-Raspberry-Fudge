@@ -1,8 +1,20 @@
 from primePy import primes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
-import requests, random, math, hashlib, socket, sys, threading, json, base64
+import requests, random, math, hashlib, socket, sys, threading, json, base64, os, pickle
 
 SERVER = "http://172.22.22.27:8000"
+
+state: dict[str, int|list[int]|bytes] = {}
+
+def save_state(state: dict[str, int|list[int]|bytes], filename:str ='useradmin_state.pk1'):
+    with open(filename, "wb") as f:
+        pickle.dump(state, f)
+
+def load_state(filename:str = 'useradmin_state.pk1'):
+    if not os.path.exists(filename):
+        return None
+    with open(filename, "rb") as f:
+        return pickle.load(f)
 
 def hash_int(x: int) -> int:
     m = hashlib.sha256()
@@ -124,7 +136,10 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
         s.bind((HOST, 0))
         s.listen()
         PORT = s.getsockname()[-1]
-        requests.post(f"{SERVER}/announce", params={"uid": uid, "did": did, "ip": HOST, "port": PORT})
+        requests.post(
+            f"{SERVER}/announce", 
+            json={"uid": uid, "did": did, "ip": HOST, "port": PORT}
+        )
         print(f"Listener started on {HOST}:{PORT}...")
 
         while True:
@@ -186,7 +201,10 @@ def init_reg():
         dk, unused, keyproduct = selfKeyDev()
 
         #Registration with server
-        init = requests.post(f"{SERVER}/super_init", json={"name": name, "unused": unused}).json()
+        init = requests.post(
+            f"{SERVER}/super_init", 
+            json={"name": name, "unused": unused}
+        ).json()
         uid, did = init["UID"], init["DID"]
 
         #Obtaining school encryption key
@@ -219,7 +237,27 @@ def init_reg():
 p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729)
 
-UID, DID, DK, keyProduct, schoolKey = init_reg()
+def runUserAdmin():
+    start_state = load_state()
+    if start_state:
+        uid = start_state["UID"]
+        did = start_state["DID"]
+        dk = start_state["DK"]
+        keyproduct = start_state["keyProduct"]
+        schoolkey = start_state["schoolKey"]
+        print("Saved state loaded.")
+    else:
+        print("Fresh state loaded.")
+        uid, did, dk, keyproduct, schoolkey = init_reg()
+        state["UID"] = uid
+        state["DID"] = did
+        state["DK"] = dk
+        state["keyProduct"] = keyproduct
+        state["schoolKey"] = schoolkey
+        save_state(state)
+    return uid, did, dk, keyproduct, schoolkey
+
+UID, DID, DK, keyProduct, schoolKey = runUserAdmin()
 
 #start listener
 listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct), daemon=False)

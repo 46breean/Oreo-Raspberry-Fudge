@@ -1,7 +1,19 @@
-import requests, random, math, hashlib, socket, sys, json, ast
+import requests, random, math, hashlib, socket, sys, json, ast, pickle, os
 from primePy import primes
 
 SERVER = "http://172.22.22.27:8000"
+
+state: dict[str, int|str] = {}
+
+def save_state(state: dict[str, int|str], filename:str ='client_state.pk1'):
+    with open(filename, "wb") as f:
+        pickle.dump(state, f)
+
+def load_state(filename:str = 'client_state.pk1'):
+    if not os.path.exists(filename):
+        return None
+    with open(filename, "rb") as f:
+        return pickle.load(f)
 
 def hash_int(x: int):
     m = hashlib.sha256()
@@ -136,7 +148,10 @@ def fn_selection(uid:int, did:int, dk:int):
                 unblinded1 = pow(blinded2, r1_inv, p)
 
                 try:
-                    resp2 = requests.post(f"{SERVER}/eval/step2", json={"uid": uid, "did": did, "unblinded1": unblinded1}).json()
+                    resp2 = requests.post(
+                        f"{SERVER}/eval/step2", 
+                        json={"uid": uid, "did": did, "unblinded1": unblinded1}
+                    ).json()
                     tempQueryResult = resp2["query_result"]
                 except requests.exceptions.HTTPError as e:
                     print("Step 2 failed:", e.response.json()["detail"])
@@ -184,7 +199,10 @@ def fn_selection(uid:int, did:int, dk:int):
                     print("[Administrator] Encryption Request Accepted.")
 
             try:
-                resp1 = requests.post(f"{SERVER}/edit/step1", json={"dataEntryType": dataEntryType, "SData": SData})
+                resp1 = requests.post(
+                    f"{SERVER}/edit/step1", 
+                    json={"dataEntryType": dataEntryType, "SData": SData}
+                )
                 resp1.raise_for_status()
             except requests.exceptions.HTTPError as e:
                 print("Step 1 failed:", e.response.json()["detail"])
@@ -240,7 +258,10 @@ def fn_selection(uid:int, did:int, dk:int):
                 addOrRemove = int(input("Select your editing type: "))
                 dataIDs = [DataID.strip() for DataID in input("Enter the Data IDs you would like to add/remove, separated by commas: ").split(",")]
                 try:
-                    resp3 = requests.post(f"{SERVER}/edit/step3", json={"uid": uid, "did": did, "unblinded1": unblinded1, "addOrRemove": addOrRemove, "dataIDs": dataIDs}).json()
+                    resp3 = requests.post(
+                        f"{SERVER}/edit/step3", 
+                        json={"uid": uid, "did": did, "unblinded1": unblinded1, "addOrRemove": addOrRemove, "dataIDs": dataIDs}
+                    ).json()
                     print("Index edit", resp3["result"])
                 except requests.exceptions.HTTPError as e:
                     print("Step 3 failed:", e.response.json()["detail"])
@@ -254,8 +275,30 @@ def fn_selection(uid:int, did:int, dk:int):
         else:
             print("Invalid choice.")
 
+def runClient():
+    start_state = load_state()
+    if start_state:
+        uid = start_state["UID"]
+        did = start_state["DID"]
+        admindid = start_state["adminDID"]
+        dk = start_state["DK"]
+        adminip = start_state["adminIP"]
+        adminport = start_state["adminPort"]
+        print("Saved state loaded.")
+    else:
+        print("Fresh state loaded.")
+        uid, did, admindid, dk, adminip, adminport = init_reg()
+        state["UID"] = uid
+        state["DID"] = did
+        state["adminDID"] = admindid
+        state["DK"] = dk
+        state["adminIP"] = adminip
+        state["adminPort"] = adminPort
+        save_state(state)
+    return uid, did, admindid, dk, adminip, adminport
+
 p:int = requests.get(f"{SERVER}/config").json()["p"]
 primeList:list[int] = primes.upto(104729)
 
-UID, DID, adminDID, DK, adminIP, adminPort = init_reg()
+UID, DID, adminDID, DK, adminIP, adminPort = runClient()
 fn_selection(UID, DID, DK)

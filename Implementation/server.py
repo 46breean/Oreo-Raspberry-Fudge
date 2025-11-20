@@ -1,8 +1,10 @@
-import random, math, uvicorn
+import random, math, uvicorn, pickle, os
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import Dict, Tuple, Optional
+from contextlib import asynccontextmanager
 
+P = 29996224275833 # prime modulus
 userDataDB: Dict[Tuple[int, int], Optional[int]] = {}
 userConstantDB: Dict[Tuple[int, int], Optional[int]] = {}
 nameDB: Dict[Tuple[int, int], str] = {}
@@ -10,18 +12,44 @@ indexDataDB: Dict[int, list[int]] = {}
 studentDataDB: Dict[int, str] = {}
 r2_store: Dict[Tuple[int, int], int] = {}
 device_locations: Dict[Tuple[int, int], Tuple[str, int]] = {}
-
-# prime modulus
-P = 29996224275833
-
-# FastAPI app
-app = FastAPI(title="Encrypted Indexing Server", version="1.0.0")
+state: Dict[str, object] = {
+    "userDataDB": userDataDB,
+    "userConstantDB": userConstantDB,
+    "nameDB": nameDB,
+    "indexDataDB": indexDataDB,
+    "studentDataDB": studentDataDB,
+    "r2_store": r2_store,
+    "device_locations": device_locations,
+}
 
 def random_coprime(p_minus_1: int) -> int:
     while True:
         r = random.randint(2, p_minus_1)
         if math.gcd(r, p_minus_1) == 1:
             return r
+
+def save_state(state: dict[str, object], filename:str ='server_state.pk1'):
+    with open(filename, "wb") as f:
+        pickle.dump(state, f)
+
+def load_state(filename:str = 'server_state.pk1'):
+    if not os.path.exists(filename):
+        return None
+    with open(filename, "rb") as f:
+        return pickle.load(f)
+
+@asynccontextmanager
+async def lifespan(app:FastAPI):
+    start_state = load_state()
+    if start_state:
+        print("Saved state loaded.")
+    else:
+        print("Fresh state loaded.")
+    yield
+    save_state(state)
+
+# FastAPI app
+app = FastAPI(title="Encrypted Indexing Server", version="1.0.0", lifespan = lifespan)
 
 # models
 class AnnounceRequest(BaseModel):
