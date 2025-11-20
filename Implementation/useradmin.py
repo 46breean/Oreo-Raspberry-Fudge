@@ -1,12 +1,14 @@
 from primePy import primes
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
 import requests, random, math, hashlib, socket, sys, threading, json, base64, os, pickle
 
 SERVER = "http://172.22.22.27:8000"
 
-state: dict[str, int|list[int]|bytes] = {}
+state: dict[str, int|list[int]|bytes|dsa.DSAPrivateKey|dsa.DSAPublicKey] = {}
 
-def save_state(state: dict[str, int|list[int]|bytes], filename:str ='useradmin_state.pk1'):
+def save_state(state: dict[str, int|list[int]|bytes|dsa.DSAPrivateKey|dsa.DSAPublicKey], filename:str ='useradmin_state.pk1'):
     with open(filename, "wb") as f:
         pickle.dump(state, f)
 
@@ -97,21 +99,24 @@ def handle_registration(uid:int, did:int, keyproduct:list[int], addr:int) -> lis
 
         new_did:int = register_data["new_did"]
         data = [new_did, new_dk]
-
     else:
         data = b"REJECTED"
-
     return data
 
-def encryptData(Data:str, schoolKey:bytes) -> str:
-    aes = AESGCMSIV(schoolKey)
+def generateDeviceCert(deviceUnsignedCert):
+    deviceUnsignedCert_bytes = deviceUnsignedCert.public_bytes(encoding=serialization.Encoding.PEM,format=serialization.PublicFormat.SubjectPublicKeyInfo)
+    deviceCert = schoolPrivateKey.sign(deviceUnsignedCert_bytes, hashes.SHA256())
+    return deviceCert
+
+def encryptData(Data:str, schoolEncKey:bytes) -> str:
+    aes = AESGCMSIV(schoolEncKey)
     nonce = b"\x00"*12
     plaintext = Data.encode("utf-8")
     ciphertext = aes.encrypt(nonce, plaintext, None)
     return base64.b64encode(ciphertext).decode("utf-8")
 
-def decryptData(Data:str, schoolKey:bytes) -> str:
-    aes = AESGCMSIV(schoolKey)
+def decryptData(Data:str, schoolEncKey:bytes) -> str:
+    aes = AESGCMSIV(schoolEncKey)
     nonce = b"\x00"*12
     ciphertext = base64.b64decode(Data)
     plaintext = aes.decrypt(nonce, ciphertext, None)
@@ -127,7 +132,7 @@ def get_local_ip() -> str:
     return ip
 
 def inbound_socket(uid:int, did:int, keyProduct:list[int]):
-    regData: dict[str,int|list[int]]
+    regData: dict[str,int|list[int]| bytes]
     plaintextData: dict[str, str]
     ciphertextData: dict[str, str]
     
@@ -146,11 +151,17 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
             conn, addr = s.accept()
             with conn:
                 data = json.loads(conn.recv(1024).decode())
-                deviceMsg  = data["deviceMsg"]
+                deviceMsg = data["deviceMsg"]
+                deviceUnsignedCert_str = data["deviceUnsignedCert"]
 
                 if deviceMsg == "Register New Device":                    
                     data = handle_registration(uid, did, keyProduct, addr)
-                    regData = {"DID": data[0], "DK": data[1]}
+                    deviceUnsignedCert = serialization.load_pem_public_key(
+                        deviceUnsignedCert_str.encode()
+                    )
+                    deviceSignedCert = generateDeviceCert(deviceUnsignedCert)
+                    deviceSignedCert_str = json.dumps(deviceSignedCert).encode()
+                    regData = {"DID": data[0], "DK": data[1], "deviceSignedCert": deviceSignedCert_str}
                     conn.sendall(json.dumps(regData).encode())
                     print(f"Device registration for DID {data[0]} completed.")
                 
@@ -162,7 +173,7 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
                     regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
                     if regreq_ans == 1:
                         for DataID, Data in plaintextData.items():
-                            ciphertextData[DataID] = encryptData(Data, schoolKey)
+                            ciphertextData[DataID] = encryptData(Data, schoolEncKey)
                     else:
                         data = b"REJECTED"
                     print("Encryption successful.")
@@ -177,7 +188,7 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
                     if regreq_ans == 1:
                         for DataID, Data in ciphertextData.items():
                             print(Data)
-                            plaintextData[DataID] = decryptData(Data, schoolKey)
+                            plaintextData[DataID] = decryptData(Data, schoolEncKey)
                     else:
                         data = b"REJECTED"
                     print("Decryption successful.")
@@ -191,7 +202,7 @@ def init_reg():
     did: int
     dk: int
     keyproduct: list[int]
-    schoolKey: bytes
+    schoolEncKey: bytes
     
     while True:
         print("\nSign Up: Initialise user")
@@ -200,10 +211,14 @@ def init_reg():
         print(f"Device name: {name}")
         dk, unused, keyproduct = selfKeyDev()
 
+        #School certificate
+        schoolPrivateKey = dsa.generate_private_key(key_size=2048)
+        schoolCert = schoolPrivateKey.public_key() 
+
         #Registration with server
         init = requests.post(
             f"{SERVER}/super_init", 
-            json={"name": name, "unused": unused}
+            json={"name": name, "unused": unused, "schoolCert": schoolCert}
         ).json()
         uid, did = init["UID"], init["DID"]
 
@@ -220,19 +235,18 @@ def init_reg():
         except requests.exceptions.HTTPError as e:
             print("Could not find server administrator:", e.response.json()["detail"])
             sys.exit(1)
-        
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print(f"Connecting to server administrator at {referral_ip}:{referral_port} to obtain school encryption key...")
             s.connect((referral_ip, referral_port))
             data = json.dumps({"deviceMsg": "Obtain school encryption key", "UID": uid, "DID":did}).encode()
             s.sendall(data)
-            schoolKey_int = int(json.loads(s.recv(4096).decode()))
-            schoolKey = schoolKey_int.to_bytes(32, "big")
+            schoolEncKey_int = int(json.loads(s.recv(4096).decode()))
+            schoolEncKey = schoolEncKey_int.to_bytes(32, "big")
 
         print(f"User registration completed for UID {uid}.")
-        print(f"User Administrator initialised with UID {uid}, DID {did}, School Encryption Key {schoolKey_int}.")
+        print(f"User Administrator initialised with UID {uid}, DID {did}, School Encryption Key {schoolEncKey_int}.")
 
-        return uid, did, dk, keyproduct, schoolKey
+        return uid, did, dk, keyproduct, schoolEncKey, schoolPrivateKey, schoolCert
 
 p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729)
@@ -244,20 +258,24 @@ def runUserAdmin():
         did = start_state["DID"]
         dk = start_state["DK"]
         keyproduct = start_state["keyProduct"]
-        schoolkey = start_state["schoolKey"]
+        schoolenckey = start_state["schoolEncKey"]
+        schoolprivatekey = start_state["schoolPrivateKey"]
+        schoolcert = start_state["schoolCert"]
         print("Saved state loaded.")
     else:
         print("Fresh state loaded.")
-        uid, did, dk, keyproduct, schoolkey = init_reg()
+        uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert = init_reg()
         state["UID"] = uid
         state["DID"] = did
         state["DK"] = dk
         state["keyProduct"] = keyproduct
-        state["schoolKey"] = schoolkey
+        state["schoolEncKey"] = schoolenckey
+        state["schoolPrivateKey"] = schoolprivatekey
+        state["schoolCert"] = schoolcert
         save_state(state)
-    return uid, did, dk, keyproduct, schoolkey
+    return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert
 
-UID, DID, DK, keyProduct, schoolKey = runUserAdmin()
+UID, DID, DK, keyProduct, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
 
 #start listener
 listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct), daemon=False)

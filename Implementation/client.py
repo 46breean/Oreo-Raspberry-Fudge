@@ -1,11 +1,13 @@
-import requests, random, math, hashlib, socket, sys, json, ast, pickle, os
+import requests, random, math, hashlib, socket, sys, json, ast, pickle, os, base64
 from primePy import primes
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import dsa
 
 SERVER = "http://172.22.22.27:8000"
 
-state: dict[str, int|str] = {}
+state: dict[str, int|str|dsa.DSAPrivateKey|dsa.DSAPublicKey|bytes] = {}
 
-def save_state(state: dict[str, int|str], filename:str ='client_state.pk1'):
+def save_state(state: dict[str, int|str|dsa.DSAPrivateKey|dsa.DSAPublicKey|bytes], filename:str ='client_state.pk1'):
     with open(filename, "wb") as f:
         pickle.dump(state, f)
 
@@ -62,12 +64,19 @@ def init_reg():
         except requests.exceptions.HTTPError as e:
             print("Could not find admin device:", e.response.json()["detail"])
             sys.exit(1)
+        
+        devicePrivateKey = dsa.generate_private_key(key_size=2048)
+        deviceUnsignedCert = devicePrivateKey.public_key()
 
         # connect to admin device
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print(f"Connecting to administrator device at {admin_ip}:{admin_port} for registration...")
             s.connect((admin_ip, admin_port))
-            data = {"deviceMsg": "Register New Device"}
+            deviceUnsignedCert_str = deviceUnsignedCert.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            ).decode()
+            data = {"deviceMsg": "Register New Device", "deviceUnsignedCert": deviceUnsignedCert_str}
             s.sendall(json.dumps(data).encode())
             print("Connected.")
             admin_reply = s.recv(4096).decode()
@@ -76,10 +85,11 @@ def init_reg():
                 sys.exit()
             else:
                 adminReply = json.loads(admin_reply)
-                did, dk = int(adminReply["DID"]), int(adminReply["DK"])
+                did, dk, deviceSignedCert_str = int(adminReply["DID"]), int(adminReply["DK"]), str(adminReply["deviceSignedCert"])
+                deviceSignedCert = deviceSignedCert_str.encode("utf-8")
                 print(f"[Administrator] Device registration for DID {did} completed.")
 
-        return uid, did, admin_did, dk, admin_ip, admin_port
+        return uid, did, admin_did, dk, admin_ip, admin_port, devicePrivateKey, deviceUnsignedCert, deviceSignedCert
 
 def fn_selection(uid:int, did:int, dk:int):
     while True:
@@ -103,9 +113,18 @@ def fn_selection(uid:int, did:int, dk:int):
             
             print(f"DIDs of registered, not yet revoked devices: {revoke_list.json()}")
             revoke_did = int(input("Enter the DID to revoke: "))
+            message = f"Revoke{revoke_did}".encode()
+            message_str = json.dumps(base64.b64encode(message).decode())
+            signature = devicePrivateKey.sign(message, hashes.SHA256())
+            signature_str = json.dumps(base64.b64encode(signature).decode())
+            deviceUnsignedCert_str = deviceUnsignedCert.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            ).decode()
+            deviceSignedCert_str = json.dumps(base64.b64encode(deviceSignedCert).decode())
             revocation_result = requests.post(
                 f"{SERVER}/revoke",
-                json={"uid": uid, "did": did, "revoke_did": revoke_did}
+                json={"uid": uid, "did": did, "revoke_did": revoke_did, "message": message_str, "signature": signature_str, "deviceUnsignedCert": deviceUnsignedCert_str, "deviceSignedCert": deviceSignedCert_str}
             ).json()
             print(revocation_result)
         
@@ -284,21 +303,27 @@ def runClient():
         dk = start_state["DK"]
         adminip = start_state["adminIP"]
         adminport = start_state["adminPort"]
+        deviceprivatekey = start_state["devicePrivateKey"]
+        deviceunsignedcert = start_state["deviceUnsignedCert"]
+        devicesignedcert = start_state["deviceSignedCert"]
         print("Saved state loaded.")
     else:
         print("Fresh state loaded.")
-        uid, did, admindid, dk, adminip, adminport = init_reg()
+        uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceunsignedcert, devicesignedcert = init_reg()
         state["UID"] = uid
         state["DID"] = did
         state["adminDID"] = admindid
         state["DK"] = dk
         state["adminIP"] = adminip
-        state["adminPort"] = adminPort
+        state["adminPort"] = adminport
+        state["devicePrivateKey"] = deviceprivatekey
+        state["deviceuUnsignedCert"] = deviceunsignedcert
+        state["deviceSignedCert"] = devicesignedcert
         save_state(state)
-    return uid, did, admindid, dk, adminip, adminport
+    return uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceunsignedcert, devicesignedcert
 
 p:int = requests.get(f"{SERVER}/config").json()["p"]
 primeList:list[int] = primes.upto(104729)
 
-UID, DID, adminDID, DK, adminIP, adminPort = runClient()
+UID, DID, adminDID, DK, adminIP, adminPort, devicePrivateKey, deviceUnsignedCert, deviceSignedCert = runClient()
 fn_selection(UID, DID, DK)

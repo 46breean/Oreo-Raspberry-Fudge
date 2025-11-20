@@ -1,12 +1,16 @@
-import random, math, uvicorn, pickle, os
+import random, math, uvicorn, pickle, os, base64, json
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import Dict, Tuple, Optional
 from contextlib import asynccontextmanager
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric import dsa
+from cryptography.hazmat.primitives import hashes, serialization
 
 P = 29996224275833 # prime modulus
 userDataDB: Dict[Tuple[int, int], Optional[int]] = {}
 userConstantDB: Dict[Tuple[int, int], Optional[int]] = {}
+userCertDB: Dict[int, dsa.DSAPublicKey]
 nameDB: Dict[Tuple[int, int], str] = {}
 indexDataDB: Dict[int, list[int]] = {}
 studentDataDB: Dict[int, str] = {}
@@ -76,6 +80,7 @@ class InitResponse(BaseModel):
 
 class SuperInitRequest(BaseModel):
     name: str = Query(...)
+    schoolCert: dsa.DSAPublicKey
 
 class SuperInitResponse(BaseModel):
     UID: int
@@ -100,6 +105,10 @@ class RevokeRequest(BaseModel):
     uid: int
     did: int
     revoke_did: int
+    message: str
+    signature: str
+    deviceUnsignedCert: str
+    deviceSignedCert: str
 
 class SuperRevokeRequest(BaseModel):
     uid: int
@@ -179,6 +188,7 @@ def super_init(req: SuperInitRequest):
     UID = 1
     DID = 1
     nameDB[(UID, DID)] = req.name
+    userCertDB[UID] = req.schoolCert
     return {"UID": UID, "DID": DID}
 
 @app.post("/register", response_model=RegisterResponse)
@@ -231,13 +241,31 @@ def revoke(req: RevokeRequest):
         raise HTTPException(status_code=400, detail="Current device not registered")
     elif userDataDB[current] is None:
         raise HTTPException(status_code=403, detail="Current device has been revoked")
-    
+
     target = (req.uid, req.revoke_did)
     if target not in userDataDB:
         raise HTTPException(status_code=404, detail="Target device not found")
     elif userDataDB[target] is None:
         raise HTTPException(status_code=409, detail="Target device already revoked")
-
+    
+    schoolCert = userCertDB[req.uid]
+    deviceUnsignedCert_bytes = req.deviceUnsignedCert.encode()
+    deviceUnsignedCert_DSAPublicKey = serialization.load_pem_public_key(deviceUnsignedCert_bytes) #idk why this says elliptic curve on line 265
+    deviceSignedCert_bytes = req.deviceSignedCert.encode()
+    deviceSignedCert_DSAPublicKey = serialization.load_pem_public_key(deviceSignedCert_bytes)
+    try:
+        schoolCert.verify(deviceSignedCert_bytes, deviceUnsignedCert_bytes, hashes.SHA256())
+    except InvalidSignature:
+        print("Device certificate is invalid. Revocation unauthorised.")
+        return
+    
+    signature_bytes = base64.b64decode(json.loads(req.signature))
+    message_bytes = base64.b64decode(json.loads(req.message))
+    try:
+        deviceUnsignedCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
+    except InvalidSignature:
+        print("Signature is invalid. Revocation unauthorised.")
+        return
     userDataDB[target] = None
     return {"Status": "Revocation Completed"}
 
