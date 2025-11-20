@@ -1,9 +1,7 @@
 import random
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import dsa
-from cryptography.hazmat.backends import default_backend
 from abc import ABC, abstractmethod
-from typing import Protocol
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.exceptions import InvalidSignature
 
