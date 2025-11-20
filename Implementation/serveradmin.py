@@ -46,7 +46,7 @@ def inbound_socket(uid:int, did:int, masterKey:bytes):
         s.listen()
         PORT = s.getsockname()[-1]
         requests.post(f"{SERVER}/announce", params={"uid": uid, "did": did, "ip": HOST, "port": PORT})
-        print(f"[Server Admin] Listener started on {HOST}:{PORT}...")
+        print(f"Listener started on {HOST}:{PORT}...")
         while True:
             conn = s.accept()[0] #addr unused
             with conn:
@@ -64,7 +64,7 @@ def inbound_socket(uid:int, did:int, masterKey:bytes):
 def init_reg() -> tuple[int, int]:
     init = requests.post(f"{SERVER}/super_init", json={"name": "serverAdmin"}).json()
     uid, did = init["UID"], init["DID"]
-    print(f"Server Admin Device initialised with UID: {uid}, DID: {did}")
+    print(f"Server Administrator initialised with UID {uid}, DID {did}")
     return uid, did
 
 masterKey = masterKeyDev()

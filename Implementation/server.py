@@ -112,7 +112,7 @@ class EditStep3Request(BaseModel):
     did: int
     unblinded1: int
     addOrRemove: int
-    DataID: list[str]
+    dataIDs: list[str]
 
 class EditStep3Response(BaseModel):
     result: str
@@ -300,7 +300,7 @@ def edit_step3(req: EditStep3Request):
     r2 = r2_store.pop(key)
     r2_inv = pow(r2, -1, P - 1)
     final_value = pow(req.unblinded1, r2_inv, P)
-    intDataID = [int(id) for id in req.DataID]
+    intDataID = [int(id) for id in req.dataIDs]
 
     for id in intDataID:
         if final_value in indexDataDB:

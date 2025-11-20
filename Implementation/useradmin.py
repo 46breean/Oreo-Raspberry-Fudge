@@ -55,7 +55,7 @@ def regKeyDev(keyproduct:list[int]):
     return base, unused
 
 def handle_registration(uid:int, did:int, keyproduct:list[int], addr:int) -> list[int]|bytes:    
-    print(f"[Admin Device] Incoming registration request from {addr}")
+    print(f"Incoming registration request from {addr}.")
     regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
 
     if regreq_ans == 1:
@@ -125,7 +125,7 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
         s.listen()
         PORT = s.getsockname()[-1]
         requests.post(f"{SERVER}/announce", params={"uid": uid, "did": did, "ip": HOST, "port": PORT})
-        print(f"[Device {did}] Listener started on {HOST}:{PORT}...")
+        print(f"Listener started on {HOST}:{PORT}...")
 
         while True:
             conn, addr = s.accept()
@@ -137,13 +137,13 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
                     data = handle_registration(uid, did, keyProduct, addr)
                     regData = {"DID": data[0], "DK": data[1]}
                     conn.sendall(json.dumps(regData).encode())
-                    print(f"[Device {data[0]}] Device registration completed.")
+                    print(f"Device registration for DID {data[0]} completed.")
                 
                 elif deviceMsg == "Encrypt Data":
                     did = data["DID"]
                     plaintextData = data["StudentData"]
                     ciphertextData = {}
-                    print(f"[Admin Device] Incoming data encryption request from device {did}")
+                    print(f"Incoming data encryption request from (device name) (DID {did}).")
                     regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
                     if regreq_ans == 1:
                         for DataID, Data in plaintextData.items():
@@ -157,7 +157,7 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
                     did = data["DID"]
                     ciphertextData = data["StudentData"]
                     plaintextData = {}
-                    print(f"[Admin Device] Incoming data decryption request from device {did}")
+                    print(f"Incoming data decryption request from (device name) (DID {did}).")
                     regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
                     if regreq_ans == 1:
                         for DataID, Data in ciphertextData.items():
@@ -180,12 +180,13 @@ def init_reg():
     
     while True:
         print("\nSign Up: Initialise user")
-        name = "admin"
+        input("Press Enter to start initialisation: ")
+        name = "Administrator"
         print(f"Device name: {name}")
         dk, unused, keyproduct = selfKeyDev()
 
         #Registration with server
-        init = requests.post(f"{SERVER}/init", json={"name": name, "unused": unused}).json()
+        init = requests.post(f"{SERVER}/super_init", json={"name": name, "unused": unused}).json()
         uid, did = init["UID"], init["DID"]
 
         #Obtaining school encryption key
@@ -199,19 +200,19 @@ def init_reg():
             referral_ip = referral_info["ip"]
             referral_port = referral_info["port"]
         except requests.exceptions.HTTPError as e:
-            print("Could not find server admin:", e.response.json()["detail"])
+            print("Could not find server administrator:", e.response.json()["detail"])
             sys.exit(1)
         
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            print(f"Connecting to server admin at {referral_ip}:{referral_port}...")
+            print(f"Connecting to server administrator at {referral_ip}:{referral_port} to obtain school encryption key...")
             s.connect((referral_ip, referral_port))
             data = json.dumps({"deviceMsg": "Obtain school encryption key", "UID": uid, "DID":did}).encode()
             s.sendall(data)
             schoolKey_int = int(json.loads(s.recv(4096).decode()))
             schoolKey = schoolKey_int.to_bytes(32, "big")
 
-        print(f"[User {uid}] User registration completed.")
-        print(f"User Admin Device initialised with UID: {uid}, Admin DID: {did}, School Encryption Key {schoolKey_int}.")
+        print(f"User registration completed for UID {uid}.")
+        print(f"User Administrator initialised with UID {uid}, DID {did}, School Encryption Key {schoolKey_int}.")
 
         return uid, did, dk, keyproduct, schoolKey
 

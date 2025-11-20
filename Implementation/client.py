@@ -8,13 +8,14 @@ def hash_int(x: int):
     m.update(str(x).encode())
     return int(m.hexdigest(), 16)
 
-def random_coprime(p_minus_1: int) -> int:
+def random_coprime(p_minus_1: int):
     while True:
         r = random.randint(2, p_minus_1)
         if math.gcd(r, p_minus_1) == 1:
             return r
 
-def get_local_ip() -> str:
+def get_local_ip():
+    ip: str
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("8.8.8.8", 80))
@@ -35,7 +36,7 @@ def init_reg():
         print("\nSign Up: Register new device")
 
         uid = int(input("Enter your UID: "))
-        admin_did = int(input("Enter your admin DID: "))
+        admin_did = int(input("Enter your administrator DID: "))
 
         try:
             loc = requests.get(
@@ -52,18 +53,19 @@ def init_reg():
 
         # connect to admin device
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            print(f"Connecting to admin device at {admin_ip}:{admin_port}...")
+            print(f"Connecting to administrator device at {admin_ip}:{admin_port} for registration...")
             s.connect((admin_ip, admin_port))
             data = {"deviceMsg": "Register New Device"}
             s.sendall(json.dumps(data).encode())
+            print("Connected.")
             admin_reply = s.recv(4096).decode()
             if admin_reply == "REJECTED":
-                print("Registration Request Rejected")
+                print("[Administrator] Registration Request Rejected.")
                 sys.exit()
             else:
                 adminReply = json.loads(admin_reply)
                 did, dk = int(adminReply["DID"]), int(adminReply["DK"])
-                print(f"[Device {did}] Device registration completed")
+                print(f"[Administrator] Device registration for DID {did} completed.")
 
         return uid, did, admin_did, dk, admin_ip, admin_port
 
@@ -88,12 +90,12 @@ def fn_selection(uid:int, did:int, dk:int):
                 sys.exit(1)
             
             print(f"DIDs of registered, not yet revoked devices: {revoke_list.json()}")
-            revoke_did = int(input("Select DID to revoke:"))
-            revoke = requests.post(
+            revoke_did = int(input("Enter the DID to revoke: "))
+            revocation_result = requests.post(
                 f"{SERVER}/revoke",
                 json={"uid": uid, "did": did, "revoke_did": revoke_did}
             ).json()
-            print(revoke)
+            print(revocation_result)
         
         elif choice == 2:
             queryResult: dict[str, str] = {}
@@ -103,7 +105,7 @@ def fn_selection(uid:int, did:int, dk:int):
             print("1. Single query: results that satisfy the given condition")
             print("2. AND query: only results that satisfy all given conditions")
             print("3. OR query: results that satisfy at least one given condition (i.e. multiple discrete single queries)")
-            queryType = int(input("Enter your choice (1/2/3): "))
+            queryType = int(input("Select your query type (1/2/3): "))
 
             indexes = [index.strip() for index in input("Enter student data quer(ies) separated by commas: ").split(",")]
             for index in indexes:
@@ -114,7 +116,10 @@ def fn_selection(uid:int, did:int, dk:int):
                 blinded = pow(hashed_index, dk * r1, p)
 
                 try:
-                    resp1 = requests.post(f"{SERVER}/eval/step1", json={"uid": uid, "did": did, "blinded": blinded})
+                    resp1 = requests.post(
+                        f"{SERVER}/eval/step1", 
+                        json={"uid": uid, "did": did, "blinded": blinded}
+                    )
                     resp1.raise_for_status()
                 except requests.exceptions.HTTPError as e:
                     print("Step 1 failed:", e.response.json()["detail"])
@@ -147,18 +152,19 @@ def fn_selection(uid:int, did:int, dk:int):
                         queryResult = {k:tempQueryResult[k] for k in queryResult if k in tempQueryResult}
             
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                print(f"Connecting to admin device at {adminIP}:{adminPort}...")
+                print(f"Connecting to administrator device at {adminIP}:{adminPort} for student data decryption...")
                 s.connect((adminIP, adminPort))
                 data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult}
                 s.sendall(json.dumps(data).encode())
                 SData = json.loads(s.recv(4096).decode())
                 if SData == b"REJECTED":
-                    print("Decryption Request Rejected.")
+                    print("[Administrator] Decryption Request Rejected.")
                 else:
+                    print("[Administrator] Decryption Request Accepted.")
                     for DataID, Data in SData.items():
                         SData[int(DataID)] = Data
         
-            print(f"Student Data: \n{SData}")
+            print(f"Student Data requested: \n{SData}")
 
         elif choice == 3:
             dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
@@ -166,16 +172,16 @@ def fn_selection(uid:int, did:int, dk:int):
             
             # connect to admin device
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                print(f"Connecting to admin device at {adminIP}:{adminPort}...")
+                print(f"Connecting to administrator device at {adminIP}:{adminPort} for student data encryption...")
                 s.connect((adminIP, adminPort))
                 data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData}
                 s.sendall(json.dumps(data).encode())
                 SData = json.loads(s.recv(4096).decode())
                 if SData == b"REJECTED":
-                    print("Encryption Request Rejected. Press Enter to continue...")
+                    print("[Administrator] Encryption Request Rejected. Press Enter to continue...")
                     return
                 else:
-                    print("Encryption successful.")
+                    print("[Administrator] Encryption Request Accepted.")
 
             try:
                 resp1 = requests.post(f"{SERVER}/edit/step1", json={"dataEntryType": dataEntryType, "SData": SData})
@@ -192,14 +198,17 @@ def fn_selection(uid:int, did:int, dk:int):
                 input("Press Enter to continue...")
                 return
             
-            print("Student database successfully edited ")
             if dataEntryType == 1: # if new student data is added
-                print(f"with the following new DataIDs: {newDataIDList}")
+                print(f"Student database successfully edited with the following new DataIDs: {newDataIDList}")
+            else:
+                print("Student database successfully edited.")
             
             print("\n===== Encrypted Index Database Editing =====")
-            entries = int(input("Enter the number of index(es) you would like to edit: "))
-            for _ in range(entries):
-                index = int(input("Enter an index to add or edit: "))
+            indexes = [index.strip() for index in input("Enter list of indexes you would like to edit, separated by commas: ").split(",")]
+            entries = len(indexes)
+            for i in range(entries):
+                index = int(indexes[i])
+                print(f"Currently editing: index {index}.")
                 hashed_index = hash_int(index) % p
                 r1 = random_coprime(p - 1)
 
@@ -225,10 +234,13 @@ def fn_selection(uid:int, did:int, dk:int):
 
                 r1_inv = pow(r1, -1, p - 1)
                 unblinded1 = pow(blinded2, r1_inv, p)
-                addOrRemove = int(input("Would you like to (1) add or (2) remove Data ID(s) from the index: "))
-                DataID = [dataID.strip() for dataID in input("Enter DataID list separated by commas: ").split(",")]
+                print("You can edit this index in 2 ways: ")
+                print("1. Add Data IDs only")
+                print("2. Remove Data IDs only")
+                addOrRemove = int(input("Select your editing type: "))
+                dataIDs = [DataID.strip() for DataID in input("Enter the Data IDs you would like to add/remove, separated by commas: ").split(",")]
                 try:
-                    resp3 = requests.post(f"{SERVER}/edit/step3", json={"uid": uid, "did": did, "unblinded1": unblinded1, "addOrRemove": addOrRemove, "DataID": DataID}).json()
+                    resp3 = requests.post(f"{SERVER}/edit/step3", json={"uid": uid, "did": did, "unblinded1": unblinded1, "addOrRemove": addOrRemove, "dataIDs": dataIDs}).json()
                     print("Index edit", resp3["result"])
                 except requests.exceptions.HTTPError as e:
                     print("Step 3 failed:", e.response.json()["detail"])
