@@ -105,14 +105,15 @@ server = Server(schoolCertDB,schoolDB,deviceDB)
 run = True
 
 while run==True:
-    choice = int(input("1 to register a new device, 2 to revoke a device, 3 to exit: "))
-    if choice == 1:
+    choice = input("1 to register a new device, 2 to revoke a device, 3 to exit: ")
+    if choice == "1":
         schoolName = input("School name: ")
         deviceName = input("Device name: ")
-        print(server.deviceRegistration(schoolName, deviceName))
+        server.deviceRegistration(schoolName, deviceName)
         device = deviceDB[(schoolName, deviceName)]
         print("Device Cert: ", device.deviceCertSignature)
-    elif choice == 2:
+        continue
+    elif choice == "2":
         schoolName = input("School name: ")
         deviceName = input("Device name: ")
         try:
@@ -133,8 +134,10 @@ while run==True:
             continue
         message = f"Revoke {targetDeviceName} from {schoolName}".encode(),hashes.SHA256()
         print(device.revokeDevice(server,user,device,schoolName,targetDeviceName))
-        
-    elif choice == 3:
+        continue
+    elif choice == "3":
         run = False
+        continue
     else:
-        print("Error")
+        print("Invalid input, please try again.")
+        continue
