@@ -232,7 +232,7 @@ def fn_selection(UID, DID, DK):
         
         elif choice == 3:
             dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
-            SData = ast.literal_eval(input("Enter student data in the format {DataID1:'Student Data 1', DataID2:'Student Data 2'}. Input any integer for DataID if inputting new data: "))
+            SData = ast.literal_eval(input("Enter student data in the format {DataID1:'Student Data 1', DataID2:'Student Data 2'}. Input '0' for DataID if inputting new data: "))
             try:
                 resp1 = requests.post(f"{SERVER}/edit/step1", json={"dataEntryType": dataEntryType, "SData": SData}).json
                 print("Student database successfully edited ")
@@ -243,8 +243,8 @@ def fn_selection(UID, DID, DK):
                 input("Press Enter to continue...")
                 return
 
-            print("===== Encrypted Index Database Editing =====")
-            index = int(input("Enter an index to add or edit: "))
+
+            index = int(input("Enter an index to edit: "))
             hashed_index = hash_int(index) % p
             r1 = random_coprime(p - 1)
 
