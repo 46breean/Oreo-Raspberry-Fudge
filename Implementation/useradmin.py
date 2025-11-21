@@ -2,6 +2,7 @@ from primePy import primes
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
+from typing import cast
 import requests, random, math, hashlib, socket, sys, threading, json, base64, os, pickle
 
 SERVER = "http://172.22.22.27:8000"
@@ -103,10 +104,10 @@ def handle_registration(uid:int, did:int, keyproduct:list[int], addr:int) -> lis
         data = b"REJECTED"
     return data
 
-def generateDeviceCert(deviceSignature):
-    deviceSignature_bytes = deviceSignature.public_bytes(encoding=serialization.Encoding.PEM,format=serialization.PublicFormat.SubjectPublicKeyInfo)
-    deviceCert = schoolPrivateKey.sign(deviceSignature_bytes, hashes.SHA256())
-    return deviceCert
+def generateDeviceSignature(deviceCert: dsa.DSAPublicKey):
+    deviceCert_bytes = deviceCert.public_bytes(encoding=serialization.Encoding.PEM,format=serialization.PublicFormat.SubjectPublicKeyInfo)
+    deviceSignature = schoolPrivateKey.sign(deviceCert_bytes, hashes.SHA256())
+    return deviceSignature
 
 def encryptData(Data:str, schoolEncKey:bytes) -> str:
     aes = AESGCMSIV(schoolEncKey)
@@ -141,10 +142,11 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
         s.bind((HOST, 0))
         s.listen()
         PORT = s.getsockname()[-1]
-        requests.post(
+        resp = requests.post(
             f"{SERVER}/announce", 
             json={"uid": uid, "did": did, "ip": HOST, "port": PORT}
-        )
+        ).json()
+        print(resp["result"])
         print(f"Listener started on {HOST}:{PORT}...")
 
         while True:
@@ -157,8 +159,9 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
                     deviceCert_str:str = data["deviceCert"]
                     data = handle_registration(uid, did, keyProduct, addr)
                     deviceCert_bytes = base64.b64decode(deviceCert_str.encode())
-                    deviceCert = serialization.load_pem_public_key(deviceCert_bytes)
-                    deviceSignature = generateDeviceCert(deviceCert)
+                    deviceCert_publicKeyTypes = serialization.load_pem_public_key(deviceCert_bytes)
+                    deviceCert = cast(dsa.DSAPublicKey, deviceCert_publicKeyTypes)
+                    deviceSignature = generateDeviceSignature(deviceCert)
                     deviceSignature_str = base64.b64encode(deviceSignature).decode()
                     regData = {"DID": data[0], "DK": data[1], "deviceSignature": deviceSignature_str}
                     conn.sendall(json.dumps(regData).encode())

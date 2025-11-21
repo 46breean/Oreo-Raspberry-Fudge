@@ -62,8 +62,9 @@ def inbound_socket(uid:int, did:int, masterKey:bytes):
         PORT = s.getsockname()[-1]
         resp = requests.post(
             f"{SERVER}/announce", 
-            json={"uid": uid, "did": did, "ip": HOST, "port": int(PORT)}
+            json={"uid": uid, "did": did, "ip": HOST, "port": PORT}
         ).json()
+        print(resp["result"])
         print(f"Listener started on {HOST}:{PORT}...")
         while True:
             conn = s.accept()[0] #addr unused

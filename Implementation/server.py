@@ -167,7 +167,7 @@ class EditStep3Response(BaseModel):
 @app.post("/announce", response_model=AnnounceResponse)
 def announce(req: AnnounceRequest):
     device_locations[(req.uid, req.did)] = (req.ip, req.port)
-    return {"status": "ok"}
+    return {"result": "This device's IP and Port have been recorded on the server."}
 
 @app.post("/device_location", response_model = DeviceLocationResponse)
 def device_location(req: DeviceLocationRequest) -> dict[str, int|str]:
