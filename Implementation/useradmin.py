@@ -1,11 +1,11 @@
-from primePy import primes
+from primePy import primes # pyright: ignore[reportMissingTypeStubs]
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
 from typing import cast
 import requests, random, math, hashlib, socket, sys, threading, json, base64, os, pickle
 
-SERVER = "http://172.22.22.27:8000"
+SERVER = "http://192.168.79.5:8000"
 
 state: dict[str, int|list[int]|bytes|dsa.DSAPrivateKey|dsa.DSAPublicKey] = {}
 
@@ -163,7 +163,7 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
                     deviceCert = cast(dsa.DSAPublicKey, deviceCert_publicKeyTypes)
                     deviceSignature = generateDeviceSignature(deviceCert)
                     deviceSignature_str = base64.b64encode(deviceSignature).decode()
-                    regData = {"DID": data[0], "DK": data[1], "deviceSignature": deviceSignature_str}
+                    regData = {"DID": data[0], "DK": data[1], "deviceSignature_str": deviceSignature_str}
                     conn.sendall(json.dumps(regData).encode())
                     print(f"Device registration for DID {data[0]} completed.")
                 
@@ -251,36 +251,36 @@ def init_reg():
             schoolEncKey = schoolEncKey_int.to_bytes(32, "big")
 
         print(f"User registration completed for UID {uid}.")
-        print(f"User Administrator initialised with UID {uid}, DID {did}, School Encryption Key {schoolEncKey_int}.")
+        print(f"User Administrator initialised with UID {uid}, DID {did}, School Encryption Key {schoolEncKey}.")
 
         return uid, did, dk, keyproduct, schoolEncKey, schoolPrivateKey, schoolCert
 
 p = requests.get(f"{SERVER}/config").json()["p"]
-primeList = primes.upto(104729)
+primeList = primes.upto(104729) # pyright: ignore[reportUnknownMemberType]
 
 def runUserAdmin():
-    # start_state = load_state()
-    # if start_state:
-    #     uid = start_state["UID"]
-    #     did = start_state["DID"]
-    #     dk = start_state["DK"]
-    #     keyproduct = start_state["keyProduct"]
-    #     schoolenckey = start_state["schoolEncKey"]
-    #     schoolprivatekey = start_state["schoolPrivateKey"]
-    #     schoolcert = start_state["schoolCert"]
-    #     print("Saved state loaded.")
-    # else:
-        # print("Fresh state loaded.")
+    start_state = load_state()
+    if start_state:
+        uid = start_state["UID"]
+        did = start_state["DID"]
+        dk = start_state["DK"]
+        keyproduct = start_state["keyProduct"]
+        schoolenckey = start_state["schoolEncKey"]
+        schoolprivatekey = start_state["schoolPrivateKey"]
+        schoolcert = start_state["schoolCert"]
+        print("Saved state loaded.")
+    else:
+        print("Fresh state loaded.")
         uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert = init_reg()
-        # state["UID"] = uid
-        # state["DID"] = did
-        # state["DK"] = dk
-        # state["keyProduct"] = keyproduct
-        # state["schoolEncKey"] = schoolenckey
-        # state["schoolPrivateKey"] = schoolprivatekey
-        # state["schoolCert"] = schoolcert
-        # save_state(state)
-        return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert
+        state["UID"] = uid
+        state["DID"] = did
+        state["DK"] = dk
+        state["keyProduct"] = keyproduct
+        state["schoolEncKey"] = schoolenckey
+        state["schoolPrivateKey"] = schoolprivatekey
+        state["schoolCert"] = schoolcert
+        save_state(state)
+    return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert
 
 UID, DID, DK, keyProduct, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
 

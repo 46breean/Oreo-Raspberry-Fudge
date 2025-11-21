@@ -1,4 +1,4 @@
-import random, math, uvicorn, pickle, os, base64, json
+import random, math, uvicorn, pickle, os, base64
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import Dict, Tuple, Optional, cast
@@ -42,17 +42,16 @@ def load_state(filename:str = 'server_state.pk1'):
     with open(filename, "rb") as f:
         return pickle.load(f)
 
-# @asynccontextmanager
-# async def lifespan(app:FastAPI):
-#     start_state = load_state()
-#     if start_state:
-#         print("Saved state loaded.")
-#     else:
-#         print("Fresh state loaded.")
-#     yield
-#     save_state(state)
+@asynccontextmanager
+async def lifespan(app:FastAPI):
+    start_state = load_state()
+    if start_state:
+        print("Saved state loaded.")
+    else:
+        print("Fresh state loaded.")
+    yield
+    save_state(state)
 
-# FastAPI app
 app = FastAPI(title="Encrypted Indexing Server", version="1.0.0") #, lifespan = lifespan
 
 # models
@@ -63,7 +62,7 @@ class AnnounceRequest(BaseModel):
     port: int
 
 class AnnounceResponse(BaseModel):
-    status: str
+    result: str
 
 class DeviceLocationRequest(BaseModel):
     uid: int = Query(...)
@@ -389,5 +388,5 @@ def edit_step3(req: EditStep3Request):
 
     return{"result": "successful"}
 
-def start_server():
+if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

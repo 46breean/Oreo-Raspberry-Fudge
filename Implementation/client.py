@@ -1,9 +1,9 @@
 import requests, random, math, hashlib, socket, sys, json, ast, pickle, os, base64
-from primePy import primes
+from primePy import primes # pyright: ignore[reportMissingTypeStubs]
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa
 
-SERVER = "http://172.22.22.27:8000"
+SERVER = "http://192.168.79.5:8000"
 
 state: dict[str, int|str|dsa.DSAPrivateKey|dsa.DSAPublicKey|bytes] = {}
 
@@ -86,7 +86,7 @@ def init_reg():
                 sys.exit()
             else:
                 adminReply = json.loads(admin_reply)
-                did, dk, deviceSignature_str = int(adminReply["DID"]), int(adminReply["DK"]), str(adminReply["deviceSignature"])
+                did, dk, deviceSignature_str = adminReply["DID"], adminReply["DK"], str(adminReply["deviceSignature_str"])
                 deviceSignature = base64.b64decode(deviceSignature_str.encode())
                 print(f"[Administrator] Device registration for DID {did} completed.")
 
@@ -300,35 +300,35 @@ def fn_selection(uid:int, did:int, dk:int):
             print("Invalid choice.")
 
 def runClient():
-    # start_state = load_state()
-    # if start_state:
-    #     uid = start_state["UID"]
-    #     did = start_state["DID"]
-    #     admindid = start_state["adminDID"]
-    #     dk = start_state["DK"]
-    #     adminip = start_state["adminIP"]
-    #     adminport = start_state["adminPort"]
-    #     deviceprivatekey = start_state["devicePrivateKey"]
-    #     deviceCert = start_state["deviceCert"]
-    #     deviceSignature = start_state["deviceSignature"]
-    #     print("Saved state loaded.")
-    # else:
-        # print("Fresh state loaded.")
+    start_state = load_state()
+    if start_state:
+        uid = start_state["UID"]
+        did = start_state["DID"]
+        admindid = start_state["adminDID"]
+        dk = start_state["DK"]
+        adminip = start_state["adminIP"]
+        adminport = start_state["adminPort"]
+        deviceprivatekey = start_state["devicePrivateKey"]
+        deviceCert = start_state["deviceCert"]
+        deviceSignature = start_state["deviceSignature"]
+        print("Saved state loaded.")
+    else:
+        print("Fresh state loaded.")
         uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature = init_reg()
-        # state["UID"] = uid
-        # state["DID"] = did
-        # state["adminDID"] = admindid
-        # state["DK"] = dk
-        # state["adminIP"] = adminip
-        # state["adminPort"] = adminport
-        # state["devicePrivateKey"] = deviceprivatekey
-        # state["deviceCert"] = deviceCert
-        # state["deviceSignature"] = deviceSignature
-        # save_state(state)
-        return uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature
+        state["UID"] = uid
+        state["DID"] = did
+        state["adminDID"] = admindid
+        state["DK"] = dk
+        state["adminIP"] = adminip
+        state["adminPort"] = adminport
+        state["devicePrivateKey"] = deviceprivatekey
+        state["deviceCert"] = deviceCert
+        state["deviceSignature"] = deviceSignature
+        save_state(state)
+    return uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature
 
 p:int = requests.get(f"{SERVER}/config").json()["p"]
-primeList:list[int] = primes.upto(104729)
+primeList:list[int] = primes.upto(104729) # pyright: ignore[reportUnknownMemberType]
 
 UID, DID, adminDID, DK, adminIP, adminPort, devicePrivateKey, deviceCert, deviceSignature = runClient()
 fn_selection(UID, DID, DK)
