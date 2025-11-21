@@ -1,9 +1,21 @@
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
-import hashlib, socket, json, requests, threading, time, os, subprocess, sys
+import hashlib, socket, json, requests, threading, time, os, subprocess, sys, pickle
 
 SERVER = "http://172.22.22.27:8000"
+
+state: dict[str, bytes|int] = {}
+
+def save_state(state: dict[str, bytes|int], filename:str ='serveradmin_state.pk1'):
+    with open(filename, "wb") as f:
+        pickle.dump(state, f)
+
+def load_state(filename:str = 'serveradmin_state.pk1'):
+    if not os.path.exists(filename):
+        return None
+    with open(filename, "rb") as f:
+        return pickle.load(f)
 
 def masterKeyDev() -> bytes:
     masterKey = AESGCMSIV.generate_key(bit_length=256)
@@ -36,7 +48,10 @@ def get_local_ip() -> str:
 
 def revoke_user():
     uid:str = input("Enter UID that is to be revoked: ")
-    revoke = requests.post(f"{SERVER}/super_revoke", json={"uid": uid}).json()
+    revoke = requests.post(
+        f"{SERVER}/super_revoke", 
+        json={"uid": uid}
+    ).json()
     print(revoke)
 
 def inbound_socket(uid:int, did:int, masterKey:bytes):
@@ -45,7 +60,10 @@ def inbound_socket(uid:int, did:int, masterKey:bytes):
         s.bind((HOST, 0))
         s.listen()
         PORT = s.getsockname()[-1]
-        requests.post(f"{SERVER}/announce", params={"uid": uid, "did": did, "ip": HOST, "port": PORT})
+        requests.post(
+            f"{SERVER}/announce", 
+            json={"uid": uid, "did": did, "ip": HOST, "port": PORT}
+        )
         print(f"Listener started on {HOST}:{PORT}...")
         while True:
             conn = s.accept()[0] #addr unused
@@ -62,16 +80,37 @@ def inbound_socket(uid:int, did:int, masterKey:bytes):
                     print("This functionality has not yet been programmed for.")
 
 def init_reg() -> tuple[int, int]:
-    init = requests.post(f"{SERVER}/super_init", json={"name": "serverAdmin"}).json()
+    init = requests.post(
+        f"{SERVER}/super_init", 
+        json={"name": "serverAdmin"}
+    ).json()
     uid, did = init["UID"], init["DID"]
     print(f"Server Administrator initialised with UID {uid}, DID {did}")
     return uid, did
 
-masterKey = masterKeyDev()
-if __name__ == "__main__":
-    runServer()
-time.sleep(5)
-UID, DID = init_reg()
+def runServerAdmin():
+    start_state = load_state()
+    if start_state:
+        masterKey = start_state["masterKey"]
+        uid = start_state["UID"]
+        did = start_state["DID"]
+        print("Saved state loaded.")
+        if __name__ == "__main__":
+            runServer()
+    else:
+        print("Fresh state loaded.")
+        masterKey = masterKeyDev()
+        if __name__ == "__main__":
+            runServer()
+        time.sleep(5)
+        uid, did = init_reg()
+        state["masterKey"] = masterKey
+        state["UID"] = uid
+        state["DID"] = did
+        save_state(state)
+    return uid, did, masterKey
+
+UID, DID, masterKey = runServerAdmin()
 
 #start listener
 listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, masterKey), daemon=False)
