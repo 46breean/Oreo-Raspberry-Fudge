@@ -109,7 +109,7 @@ while run==True:
         deviceName = input("Device name: ")
         server.deviceRegistration(schoolName, deviceName)
         device = deviceDB[(schoolName, deviceName)]
-        print("Device Cert: ", device.deviceCertSignature)
+        print("Device Cert: ", device.deviceCertSignature.hex())
         continue
     elif choice == "2":
         schoolName = input("School name: ")
