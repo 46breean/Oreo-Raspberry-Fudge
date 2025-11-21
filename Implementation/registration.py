@@ -1,6 +1,6 @@
 import sys, random, requests, ast, json
 
-SERVER = "http://127.0.0.1:8000"
+SERVER = "http://:8000"
 
 def keyDev(keyproduct):
     requirement = False
