@@ -1,7 +1,7 @@
 import random, math, uvicorn, pickle, os, base64, json
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, cast
 from contextlib import asynccontextmanager
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import dsa
@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 P = 29996224275833 # prime modulus
 userDataDB: Dict[Tuple[int, int], Optional[int]] = {}
 userConstantDB: Dict[Tuple[int, int], Optional[int]] = {}
-userCertDB: Dict[int, dsa.DSAPublicKey]
+userCertDB: Dict[int, dsa.DSAPublicKey] = {}
 nameDB: Dict[Tuple[int, int], str] = {}
 indexDataDB: Dict[int, list[int]] = {}
 studentDataDB: Dict[int, str] = {}
@@ -42,29 +42,32 @@ def load_state(filename:str = 'server_state.pk1'):
     with open(filename, "rb") as f:
         return pickle.load(f)
 
-@asynccontextmanager
-async def lifespan(app:FastAPI):
-    start_state = load_state()
-    if start_state:
-        print("Saved state loaded.")
-    else:
-        print("Fresh state loaded.")
-    yield
-    save_state(state)
+# @asynccontextmanager
+# async def lifespan(app:FastAPI):
+#     start_state = load_state()
+#     if start_state:
+#         print("Saved state loaded.")
+#     else:
+#         print("Fresh state loaded.")
+#     yield
+#     save_state(state)
 
 # FastAPI app
-app = FastAPI(title="Encrypted Indexing Server", version="1.0.0", lifespan = lifespan)
+app = FastAPI(title="Encrypted Indexing Server", version="1.0.0") #, lifespan = lifespan
 
 # models
 class AnnounceRequest(BaseModel):
-    UID: int
-    DID: int
+    uid: int
+    did: int
     ip: str
     port: int
 
+class AnnounceResponse(BaseModel):
+    status: str
+
 class DeviceLocationRequest(BaseModel):
-    uid: int
-    did: int
+    uid: int = Query(...)
+    did: int = Query(...)
 
 class DeviceLocationResponse(BaseModel):
     ip: str
@@ -73,6 +76,7 @@ class DeviceLocationResponse(BaseModel):
 class InitRequest(BaseModel):
     unused: int
     name: str = Query(...)
+    schoolCert_str: str
 
 class InitResponse(BaseModel):
     UID: int
@@ -80,7 +84,6 @@ class InitResponse(BaseModel):
 
 class SuperInitRequest(BaseModel):
     name: str = Query(...)
-    schoolCert: dsa.DSAPublicKey
 
 class SuperInitResponse(BaseModel):
     UID: int
@@ -105,13 +108,19 @@ class RevokeRequest(BaseModel):
     uid: int
     did: int
     revoke_did: int
-    message: str
-    signature: str
-    deviceUnsignedCert: str
-    deviceSignedCert: str
+    message_str: str
+    msgSignature_str: str
+    deviceCert_str: str
+    deviceSignature_str: str
+
+class RevokeResponse(BaseModel):
+    result: str
 
 class SuperRevokeRequest(BaseModel):
     uid: int
+
+class SuperRevokeResponse(BaseModel):
+    result: str
 
 class EvalStep1Request(BaseModel):
     uid: int
@@ -155,15 +164,16 @@ class EditStep3Response(BaseModel):
     result: str
 
 # endpoints
-@app.post("/announce")
+@app.post("/announce", response_model=AnnounceResponse)
 def announce(req: AnnounceRequest):
-    device_locations[(req.UID, req.DID)] = (req.ip, req.port)
+    device_locations[(req.uid, req.did)] = (req.ip, req.port)
     return {"status": "ok"}
 
-@app.get("/device_location", response_model = DeviceLocationResponse)
+@app.post("/device_location", response_model = DeviceLocationResponse)
 def device_location(req: DeviceLocationRequest) -> dict[str, int|str]:
     if (req.uid, req.did) not in device_locations:
         raise HTTPException(status_code=404, detail="Device not found")
+    
     ip = device_locations[(req.uid, req.did)][0]
     port = device_locations[(req.uid, req.did)][1]
     return {"ip": ip, "port": port}
@@ -181,6 +191,11 @@ def init_device(req: InitRequest):
     userConstantDB[(UID, DID)] = constant
     userDataDB[(UID, DID)] = DSK
     nameDB[(UID, DID)] = req.name
+    if req.schoolCert_str:
+        schoolCert_bytes = base64.b64decode(req.schoolCert_str.encode())
+        schoolCert_publicKeyTypes = serialization.load_pem_public_key(schoolCert_bytes)
+        schoolCert = cast(dsa.DSAPublicKey, schoolCert_publicKeyTypes)
+        userCertDB[UID] = schoolCert
     return {"UID": UID, "DID": DID}
 
 @app.post("/super_init", response_model=SuperInitResponse)
@@ -188,7 +203,6 @@ def super_init(req: SuperInitRequest):
     UID = 1
     DID = 1
     nameDB[(UID, DID)] = req.name
-    userCertDB[UID] = req.schoolCert
     return {"UID": UID, "DID": DID}
 
 @app.post("/register", response_model=RegisterResponse)
@@ -224,17 +238,17 @@ def register_device(req: RegisterRequest):
     return {"new_did": new_did}
 
 @app.get("/revoke_list", response_model=RevokeListResponse)
-def revoke_list(req: RevokeListRequest):
-    key = (req.uid, req.did)
+def revoke_list(uid: int = Query(...), did: int = Query(...)):
+    key = (uid, did)
     if key not in userDataDB:
         raise HTTPException(status_code=400, detail="Current device not registered")
     if userDataDB[key] is None:
         raise HTTPException(status_code=403, detail="Current device has been revoked")
 
-    dids = [d for (u, d), dsk in userDataDB.items() if u == req.uid and dsk is not None]
-    return {"DIDs": dids}
+    dids = [d for (u, d), dsk in userDataDB.items() if u == uid and dsk is not None]
+    return {"dids": dids}
 
-@app.post("/revoke")
+@app.post("/revoke", response_model=RevokeResponse)
 def revoke(req: RevokeRequest):
     current = (req.uid, req.did)
     if current not in userDataDB:
@@ -248,33 +262,34 @@ def revoke(req: RevokeRequest):
     elif userDataDB[target] is None:
         raise HTTPException(status_code=409, detail="Target device already revoked")
     
+    print(userCertDB)
     schoolCert = userCertDB[req.uid]
-    deviceUnsignedCert_bytes = req.deviceUnsignedCert.encode()
-    deviceUnsignedCert_DSAPublicKey = serialization.load_pem_public_key(deviceUnsignedCert_bytes) #idk why this says elliptic curve on line 265
-    deviceSignedCert_bytes = req.deviceSignedCert.encode()
-    deviceSignedCert_DSAPublicKey = serialization.load_pem_public_key(deviceSignedCert_bytes)
+    deviceCert_bytes = base64.b64decode(req.deviceCert_str.encode())
+    deviceCert_publicKeyTypes = serialization.load_pem_public_key(deviceCert_bytes)
+    deviceCert_DSAPublicKey = cast(dsa.DSAPublicKey, deviceCert_publicKeyTypes)
+    deviceSignature_bytes = base64.b64decode(req.deviceSignature_str.encode())
     try:
-        schoolCert.verify(deviceSignedCert_bytes, deviceUnsignedCert_bytes, hashes.SHA256())
+        schoolCert.verify(deviceSignature_bytes, deviceCert_bytes, hashes.SHA256())
     except InvalidSignature:
         print("Device certificate is invalid. Revocation unauthorised.")
         return
     
-    signature_bytes = base64.b64decode(json.loads(req.signature))
-    message_bytes = base64.b64decode(json.loads(req.message))
+    signature_bytes = base64.b64decode(req.msgSignature_str.encode())
+    message_bytes = base64.b64decode(req.message_str.encode())
     try:
-        deviceUnsignedCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
+        deviceCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
     except InvalidSignature:
         print("Signature is invalid. Revocation unauthorised.")
         return
     userDataDB[target] = None
-    return {"Status": "Revocation Completed"}
+    return {"result": "Revocation Completed."}
 
-@app.post("/super_revoke")
+@app.post("/super_revoke", response_model=SuperRevokeResponse)
 def super_revoke(req: SuperRevokeRequest):
     for (k,_) in userDataDB.items():
         if k[0] == req.uid:
             userDataDB[k] = None
-    return {"Status": "Revocation Completed"}
+    return {"result": "Revocation Completed."}
     
 @app.post("/eval/step1", response_model=EvalStep1Response)
 def eval_step1(req: EvalStep1Request):

@@ -103,9 +103,9 @@ def handle_registration(uid:int, did:int, keyproduct:list[int], addr:int) -> lis
         data = b"REJECTED"
     return data
 
-def generateDeviceCert(deviceUnsignedCert):
-    deviceUnsignedCert_bytes = deviceUnsignedCert.public_bytes(encoding=serialization.Encoding.PEM,format=serialization.PublicFormat.SubjectPublicKeyInfo)
-    deviceCert = schoolPrivateKey.sign(deviceUnsignedCert_bytes, hashes.SHA256())
+def generateDeviceCert(deviceSignature):
+    deviceSignature_bytes = deviceSignature.public_bytes(encoding=serialization.Encoding.PEM,format=serialization.PublicFormat.SubjectPublicKeyInfo)
+    deviceCert = schoolPrivateKey.sign(deviceSignature_bytes, hashes.SHA256())
     return deviceCert
 
 def encryptData(Data:str, schoolEncKey:bytes) -> str:
@@ -113,7 +113,7 @@ def encryptData(Data:str, schoolEncKey:bytes) -> str:
     nonce = b"\x00"*12
     plaintext = Data.encode("utf-8")
     ciphertext = aes.encrypt(nonce, plaintext, None)
-    return base64.b64encode(ciphertext).decode("utf-8")
+    return base64.b64encode(ciphertext).decode()
 
 def decryptData(Data:str, schoolEncKey:bytes) -> str:
     aes = AESGCMSIV(schoolEncKey)
@@ -132,7 +132,7 @@ def get_local_ip() -> str:
     return ip
 
 def inbound_socket(uid:int, did:int, keyProduct:list[int]):
-    regData: dict[str,int|list[int]| bytes]
+    regData: dict[str,int|str]
     plaintextData: dict[str, str]
     ciphertextData: dict[str, str]
     
@@ -150,18 +150,17 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
         while True:
             conn, addr = s.accept()
             with conn:
-                data = json.loads(conn.recv(1024).decode())
-                deviceMsg = data["deviceMsg"]
-                deviceUnsignedCert_str = data["deviceUnsignedCert"]
+                data = json.loads(conn.recv(4096).decode())
+                deviceMsg:str = data["deviceMsg"]
 
-                if deviceMsg == "Register New Device":                    
+                if deviceMsg == "Register New Device":
+                    deviceCert_str:str = data["deviceCert"]
                     data = handle_registration(uid, did, keyProduct, addr)
-                    deviceUnsignedCert = serialization.load_pem_public_key(
-                        deviceUnsignedCert_str.encode()
-                    )
-                    deviceSignedCert = generateDeviceCert(deviceUnsignedCert)
-                    deviceSignedCert_str = json.dumps(deviceSignedCert).encode()
-                    regData = {"DID": data[0], "DK": data[1], "deviceSignedCert": deviceSignedCert_str}
+                    deviceCert_bytes = base64.b64decode(deviceCert_str.encode())
+                    deviceCert = serialization.load_pem_public_key(deviceCert_bytes)
+                    deviceSignature = generateDeviceCert(deviceCert)
+                    deviceSignature_str = base64.b64encode(deviceSignature).decode()
+                    regData = {"DID": data[0], "DK": data[1], "deviceSignature": deviceSignature_str}
                     conn.sendall(json.dumps(regData).encode())
                     print(f"Device registration for DID {data[0]} completed.")
                 
@@ -213,33 +212,38 @@ def init_reg():
 
         #School certificate
         schoolPrivateKey = dsa.generate_private_key(key_size=2048)
-        schoolCert = schoolPrivateKey.public_key() 
-
+        schoolCert = schoolPrivateKey.public_key()
+        schoolCert_bytes = schoolCert.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        schoolCert_str = base64.b64encode(schoolCert_bytes).decode()
         #Registration with server
         init = requests.post(
-            f"{SERVER}/super_init", 
-            json={"name": name, "unused": unused, "schoolCert": schoolCert}
+            f"{SERVER}/init", 
+            json={"name": name, "unused": unused, "schoolCert_str": schoolCert_str}
         ).json()
         uid, did = init["UID"], init["DID"]
 
         #Obtaining school encryption key
         try:
-            loc = requests.get(
+            loc = requests.post(
                 f"{SERVER}/device_location",
-                params={"uid": 1, "did": 1}
+                json={"uid": 1, "did": 1}
             )
             loc.raise_for_status()
-            referral_info = loc.json()
-            referral_ip = referral_info["ip"]
-            referral_port = referral_info["port"]
         except requests.exceptions.HTTPError as e:
             print("Could not find server administrator:", e.response.json()["detail"])
             sys.exit(1)
+        referral_info = loc.json()
+        referral_ip = referral_info["ip"]
+        referral_port = referral_info["port"]
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print(f"Connecting to server administrator at {referral_ip}:{referral_port} to obtain school encryption key...")
             s.connect((referral_ip, referral_port))
             data = json.dumps({"deviceMsg": "Obtain school encryption key", "UID": uid, "DID":did}).encode()
             s.sendall(data)
+            print("Connected, awaiting response...")
             schoolEncKey_int = int(json.loads(s.recv(4096).decode()))
             schoolEncKey = schoolEncKey_int.to_bytes(32, "big")
 
@@ -252,28 +256,28 @@ p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729)
 
 def runUserAdmin():
-    start_state = load_state()
-    if start_state:
-        uid = start_state["UID"]
-        did = start_state["DID"]
-        dk = start_state["DK"]
-        keyproduct = start_state["keyProduct"]
-        schoolenckey = start_state["schoolEncKey"]
-        schoolprivatekey = start_state["schoolPrivateKey"]
-        schoolcert = start_state["schoolCert"]
-        print("Saved state loaded.")
-    else:
-        print("Fresh state loaded.")
+    # start_state = load_state()
+    # if start_state:
+    #     uid = start_state["UID"]
+    #     did = start_state["DID"]
+    #     dk = start_state["DK"]
+    #     keyproduct = start_state["keyProduct"]
+    #     schoolenckey = start_state["schoolEncKey"]
+    #     schoolprivatekey = start_state["schoolPrivateKey"]
+    #     schoolcert = start_state["schoolCert"]
+    #     print("Saved state loaded.")
+    # else:
+        # print("Fresh state loaded.")
         uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert = init_reg()
-        state["UID"] = uid
-        state["DID"] = did
-        state["DK"] = dk
-        state["keyProduct"] = keyproduct
-        state["schoolEncKey"] = schoolenckey
-        state["schoolPrivateKey"] = schoolprivatekey
-        state["schoolCert"] = schoolcert
-        save_state(state)
-    return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert
+        # state["UID"] = uid
+        # state["DID"] = did
+        # state["DK"] = dk
+        # state["keyProduct"] = keyproduct
+        # state["schoolEncKey"] = schoolenckey
+        # state["schoolPrivateKey"] = schoolprivatekey
+        # state["schoolCert"] = schoolcert
+        # save_state(state)
+        return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert
 
 UID, DID, DK, keyProduct, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
 

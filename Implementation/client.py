@@ -53,9 +53,9 @@ def init_reg():
         admin_did = int(input("Enter your administrator DID: "))
 
         try:
-            loc = requests.get(
+            loc = requests.post(
                 f"{SERVER}/device_location",
-                params={"uid": uid, "did": admin_did}
+                json={"uid": uid, "did": admin_did}
             )
             loc.raise_for_status()
             admin_info = loc.json()
@@ -66,30 +66,31 @@ def init_reg():
             sys.exit(1)
         
         devicePrivateKey = dsa.generate_private_key(key_size=2048)
-        deviceUnsignedCert = devicePrivateKey.public_key()
+        deviceCert = devicePrivateKey.public_key()
 
         # connect to admin device
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print(f"Connecting to administrator device at {admin_ip}:{admin_port} for registration...")
             s.connect((admin_ip, admin_port))
-            deviceUnsignedCert_str = deviceUnsignedCert.public_bytes(
+            deviceCert_bytes = deviceCert.public_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PublicFormat.SubjectPublicKeyInfo,
-            ).decode()
-            data = {"deviceMsg": "Register New Device", "deviceUnsignedCert": deviceUnsignedCert_str}
+            )
+            deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
+            data = {"deviceMsg": "Register New Device", "deviceCert": deviceCert_str}
             s.sendall(json.dumps(data).encode())
-            print("Connected.")
+            print("Connected; awaiting response...")
             admin_reply = s.recv(4096).decode()
             if admin_reply == "REJECTED":
                 print("[Administrator] Registration Request Rejected.")
                 sys.exit()
             else:
                 adminReply = json.loads(admin_reply)
-                did, dk, deviceSignedCert_str = int(adminReply["DID"]), int(adminReply["DK"]), str(adminReply["deviceSignedCert"])
-                deviceSignedCert = deviceSignedCert_str.encode("utf-8")
+                did, dk, deviceSignature_str = int(adminReply["DID"]), int(adminReply["DK"]), str(adminReply["deviceSignature"])
+                deviceSignature = base64.b64decode(deviceSignature_str.encode())
                 print(f"[Administrator] Device registration for DID {did} completed.")
 
-        return uid, did, admin_did, dk, admin_ip, admin_port, devicePrivateKey, deviceUnsignedCert, deviceSignedCert
+        return uid, did, admin_did, dk, admin_ip, admin_port, devicePrivateKey, deviceCert, deviceSignature
 
 def fn_selection(uid:int, did:int, dk:int):
     while True:
@@ -101,32 +102,36 @@ def fn_selection(uid:int, did:int, dk:int):
         choice = int(input("Select function: "))
 
         if choice == 1:
+            revoke_did: int
             try:
                 revoke_list = requests.get(
                     f"{SERVER}/revoke_list",
                     params = {"uid": uid, "did": did}
                 )
                 revoke_list.raise_for_status()
+                did_list = revoke_list.json()["dids"]
             except requests.exceptions.HTTPError as e:
                 print ("Current device not found")
                 sys.exit(1)
             
-            print(f"DIDs of registered, not yet revoked devices: {revoke_list.json()}")
-            revoke_did = int(input("Enter the DID to revoke: "))
-            message = f"Revoke{revoke_did}".encode()
-            message_str = json.dumps(base64.b64encode(message).decode())
-            signature = devicePrivateKey.sign(message, hashes.SHA256())
-            signature_str = json.dumps(base64.b64encode(signature).decode())
-            deviceUnsignedCert_str = deviceUnsignedCert.public_bytes(
+            print(f"DIDs of registered, not yet revoked devices: {did_list}")
+            did_selection = int(input("Select DID to revoke: "))-1
+            revoke_did = did_list[did_selection]
+            message_str = f"Revoke{revoke_did}"
+            message_bytes = base64.b64decode(message_str.encode())
+            msgSignature = devicePrivateKey.sign(message_bytes, hashes.SHA256())
+            msgSignature_str = base64.b64encode(msgSignature).decode()
+            deviceCert_bytes = deviceCert.public_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PublicFormat.SubjectPublicKeyInfo,
-            ).decode()
-            deviceSignedCert_str = json.dumps(base64.b64encode(deviceSignedCert).decode())
-            revocation_result = requests.post(
+            )
+            deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
+            deviceSignature_str = base64.b64encode(deviceSignature).decode()
+            revocation = requests.post(
                 f"{SERVER}/revoke",
-                json={"uid": uid, "did": did, "revoke_did": revoke_did, "message": message_str, "signature": signature_str, "deviceUnsignedCert": deviceUnsignedCert_str, "deviceSignedCert": deviceSignedCert_str}
+                json={"uid": uid, "did": did, "revoke_did": revoke_did, "message_str": message_str, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
             ).json()
-            print(revocation_result)
+            print(revocation["result"])
         
         elif choice == 2:
             queryResult: dict[str, str] = {}
@@ -295,35 +300,35 @@ def fn_selection(uid:int, did:int, dk:int):
             print("Invalid choice.")
 
 def runClient():
-    start_state = load_state()
-    if start_state:
-        uid = start_state["UID"]
-        did = start_state["DID"]
-        admindid = start_state["adminDID"]
-        dk = start_state["DK"]
-        adminip = start_state["adminIP"]
-        adminport = start_state["adminPort"]
-        deviceprivatekey = start_state["devicePrivateKey"]
-        deviceunsignedcert = start_state["deviceUnsignedCert"]
-        devicesignedcert = start_state["deviceSignedCert"]
-        print("Saved state loaded.")
-    else:
-        print("Fresh state loaded.")
-        uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceunsignedcert, devicesignedcert = init_reg()
-        state["UID"] = uid
-        state["DID"] = did
-        state["adminDID"] = admindid
-        state["DK"] = dk
-        state["adminIP"] = adminip
-        state["adminPort"] = adminport
-        state["devicePrivateKey"] = deviceprivatekey
-        state["deviceuUnsignedCert"] = deviceunsignedcert
-        state["deviceSignedCert"] = devicesignedcert
-        save_state(state)
-    return uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceunsignedcert, devicesignedcert
+    # start_state = load_state()
+    # if start_state:
+    #     uid = start_state["UID"]
+    #     did = start_state["DID"]
+    #     admindid = start_state["adminDID"]
+    #     dk = start_state["DK"]
+    #     adminip = start_state["adminIP"]
+    #     adminport = start_state["adminPort"]
+    #     deviceprivatekey = start_state["devicePrivateKey"]
+    #     deviceCert = start_state["deviceCert"]
+    #     deviceSignature = start_state["deviceSignature"]
+    #     print("Saved state loaded.")
+    # else:
+        # print("Fresh state loaded.")
+        uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature = init_reg()
+        # state["UID"] = uid
+        # state["DID"] = did
+        # state["adminDID"] = admindid
+        # state["DK"] = dk
+        # state["adminIP"] = adminip
+        # state["adminPort"] = adminport
+        # state["devicePrivateKey"] = deviceprivatekey
+        # state["deviceCert"] = deviceCert
+        # state["deviceSignature"] = deviceSignature
+        # save_state(state)
+        return uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature
 
 p:int = requests.get(f"{SERVER}/config").json()["p"]
 primeList:list[int] = primes.upto(104729)
 
-UID, DID, adminDID, DK, adminIP, adminPort, devicePrivateKey, deviceUnsignedCert, deviceSignedCert = runClient()
+UID, DID, adminDID, DK, adminIP, adminPort, devicePrivateKey, deviceCert, deviceSignature = runClient()
 fn_selection(UID, DID, DK)

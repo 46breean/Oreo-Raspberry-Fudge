@@ -52,7 +52,7 @@ def revoke_user():
         f"{SERVER}/super_revoke", 
         json={"uid": uid}
     ).json()
-    print(revoke)
+    print(revoke["result"])
 
 def inbound_socket(uid:int, did:int, masterKey:bytes):
     HOST = get_local_ip()
@@ -60,15 +60,15 @@ def inbound_socket(uid:int, did:int, masterKey:bytes):
         s.bind((HOST, 0))
         s.listen()
         PORT = s.getsockname()[-1]
-        requests.post(
+        resp = requests.post(
             f"{SERVER}/announce", 
-            json={"uid": uid, "did": did, "ip": HOST, "port": PORT}
-        )
+            json={"uid": uid, "did": did, "ip": HOST, "port": int(PORT)}
+        ).json()
         print(f"Listener started on {HOST}:{PORT}...")
         while True:
             conn = s.accept()[0] #addr unused
             with conn:
-                data = json.loads(conn.recv(1024).decode())
+                data = json.loads(conn.recv(4096).decode())
                 deviceMsg, uid, did = data["deviceMsg"], data["UID"], data["DID"]
                 if deviceMsg == "Obtain school encryption key":
                     schoolKey_bytes = schoolKeyDev(masterKey, uid, did)
@@ -89,26 +89,26 @@ def init_reg() -> tuple[int, int]:
     return uid, did
 
 def runServerAdmin():
-    start_state = load_state()
-    if start_state:
-        masterKey = start_state["masterKey"]
-        uid = start_state["UID"]
-        did = start_state["DID"]
-        print("Saved state loaded.")
-        if __name__ == "__main__":
-            runServer()
-    else:
-        print("Fresh state loaded.")
+    # start_state = load_state()
+    # if start_state:
+    #     masterKey = start_state["masterKey"]
+    #     uid = start_state["UID"]
+    #     did = start_state["DID"]
+    #     print("Saved state loaded.")
+    #     if __name__ == "__main__":
+    #         runServer()
+    # else:
+        # print("Fresh state loaded.")
         masterKey = masterKeyDev()
         if __name__ == "__main__":
             runServer()
-        time.sleep(5)
+        time.sleep(10)
         uid, did = init_reg()
-        state["masterKey"] = masterKey
-        state["UID"] = uid
-        state["DID"] = did
-        save_state(state)
-    return uid, did, masterKey
+        # state["masterKey"] = masterKey
+        # state["UID"] = uid
+        # state["DID"] = did
+        # save_state(state)
+        return uid, did, masterKey
 
 UID, DID, masterKey = runServerAdmin()
 
