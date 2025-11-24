@@ -92,7 +92,7 @@ def init_reg():
 
         return uid, did, admin_did, dk, admin_ip, admin_port, devicePrivateKey, deviceCert, deviceSignature
 
-def fn_selection(uid:int, did:int, dk:int):
+def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, deviceprivatekey: dsa.DSAPrivateKey, devicecert: dsa.DSAPublicKey, devicesignature: bytes):
     while True:
         print("\nDevice Menu:")
         print("1. Revoke device")
@@ -119,14 +119,14 @@ def fn_selection(uid:int, did:int, dk:int):
             revoke_did = did_list[did_selection]
             message_str = f"Revoke{revoke_did}"
             message_bytes = base64.b64decode(message_str.encode())
-            msgSignature = devicePrivateKey.sign(message_bytes, hashes.SHA256())
+            msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
             msgSignature_str = base64.b64encode(msgSignature).decode()
-            deviceCert_bytes = deviceCert.public_bytes(
+            deviceCert_bytes = devicecert.public_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PublicFormat.SubjectPublicKeyInfo,
             )
             deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
-            deviceSignature_str = base64.b64encode(deviceSignature).decode()
+            deviceSignature_str = base64.b64encode(devicesignature).decode()
             revocation = requests.post(
                 f"{SERVER}/revoke",
                 json={"uid": uid, "did": did, "revoke_did": revoke_did, "message_str": message_str, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
@@ -191,8 +191,8 @@ def fn_selection(uid:int, did:int, dk:int):
                         queryResult = {k:tempQueryResult[k] for k in queryResult if k in tempQueryResult}
             
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                print(f"Connecting to administrator device at {adminIP}:{adminPort} for student data decryption...")
-                s.connect((adminIP, adminPort))
+                print(f"Connecting to administrator device at {adminip}:{adminport} for student data decryption...")
+                s.connect((adminip, adminport))
                 data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult}
                 s.sendall(json.dumps(data).encode())
                 SData = json.loads(s.recv(4096).decode())
@@ -211,8 +211,8 @@ def fn_selection(uid:int, did:int, dk:int):
             
             # connect to admin device
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                print(f"Connecting to administrator device at {adminIP}:{adminPort} for student data encryption...")
-                s.connect((adminIP, adminPort))
+                print(f"Connecting to administrator device at {adminip}:{adminport} for student data encryption...")
+                s.connect((adminip, adminport))
                 data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData}
                 s.sendall(json.dumps(data).encode())
                 SData = json.loads(s.recv(4096).decode())
@@ -331,4 +331,4 @@ p:int = requests.get(f"{SERVER}/config").json()["p"]
 primeList:list[int] = primes.upto(104729) # pyright: ignore[reportUnknownMemberType]
 
 UID, DID, adminDID, DK, adminIP, adminPort, devicePrivateKey, deviceCert, deviceSignature = runClient()
-fn_selection(UID, DID, DK)
+fn_selection(UID, DID, DK, adminIP, adminPort, devicePrivateKey, deviceCert, deviceSignature)

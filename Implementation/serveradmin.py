@@ -43,7 +43,7 @@ def revoke_user():
     ).json()
     print(revoke["result"])
 
-def inbound_socket(uid:int, did:int, masterKey:bytes):
+def inbound_socket(uid: int, did: int, masterKey: bytes):
     HOST = get_local_ip()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, 0))

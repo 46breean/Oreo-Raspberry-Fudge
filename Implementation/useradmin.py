@@ -221,6 +221,12 @@ def init_reg():
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
         schoolCert_str = base64.b64encode(schoolCert_bytes).decode()
+
+        #Administrator device certificate
+        devicePrivateKey = dsa.generate_private_key(key_size=2048)
+        deviceCert = devicePrivateKey.public_key()
+        deviceSignature = generateDeviceSignature(deviceCert)
+
         #Registration with server
         init = requests.post(
             f"{SERVER}/init", 
@@ -253,7 +259,7 @@ def init_reg():
         print(f"User registration completed for UID {uid}.")
         print(f"User Administrator initialised with UID {uid}, DID {did}, School Encryption Key {schoolEncKey}.")
 
-        return uid, did, dk, keyproduct, schoolEncKey, schoolPrivateKey, schoolCert
+        return uid, did, dk, keyproduct, schoolEncKey, devicePrivateKey, deviceCert, deviceSignature, schoolPrivateKey, schoolCert
 
 p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729) # pyright: ignore[reportUnknownMemberType]
@@ -265,13 +271,16 @@ def runUserAdmin():
         did = start_state["DID"]
         dk = start_state["DK"]
         keyproduct = start_state["keyProduct"]
+        deviceprivatekey = start_state["devicePrivateKey"]
+        devicecert = start_state["deviceCert"]
+        devicesignature = start_state["deviceSignature"]
         schoolenckey = start_state["schoolEncKey"]
         schoolprivatekey = start_state["schoolPrivateKey"]
         schoolcert = start_state["schoolCert"]
         print("Saved state loaded.")
     else:
         print("Fresh state loaded.")
-        uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert = init_reg()
+        uid, did, dk, keyproduct, deviceprivatekey, devicecert, devicesignature, schoolenckey, schoolprivatekey, schoolcert = init_reg()
         state["UID"] = uid
         state["DID"] = did
         state["DK"] = dk
@@ -280,10 +289,45 @@ def runUserAdmin():
         state["schoolPrivateKey"] = schoolprivatekey
         state["schoolCert"] = schoolcert
         save_state(state)
-    return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert
+    return uid, did, dk, keyproduct, deviceprivatekey, devicecert, devicesignature, schoolenckey, schoolprivatekey, schoolcert
 
-UID, DID, DK, keyProduct, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
+def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devicecert: dsa.DSAPublicKey, devicesignature: bytes):
+    try:
+        revoke_list = requests.get(
+            f"{SERVER}/revoke_list",
+            params = {"uid": uid, "did": did}
+        )
+        revoke_list.raise_for_status()
+        did_list = revoke_list.json()["dids"]
+    except requests.exceptions.HTTPError as e:
+        print ("Current device not found")
+        sys.exit(1)
+    
+    print(f"DIDs of registered, not yet revoked devices: {did_list}")
+    did_selection = int(input("Select DID to revoke: "))-1
+    revoke_did = int(did_list[did_selection])
+    message_str = f"Revoke{revoke_did}"
+    message_bytes = base64.b64decode(message_str.encode())
+    msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
+    msgSignature_str = base64.b64encode(msgSignature).decode()
+    deviceCert_bytes = devicecert.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
+    deviceSignature_str = base64.b64encode(devicesignature).decode()
+    revocation = requests.post(
+        f"{SERVER}/revoke",
+        json={"uid": uid, "did": did, "revoke_did": revoke_did, "message_str": message_str, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
+    ).json()
+    print(revocation["result"])
+
+UID, DID, DK, keyProduct, devicePrivateKey, deviceCert, deviceSignature, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
 
 #start listener
 listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct), daemon=False)
 listener_thread.start()
+
+while True:
+    input("Press enter to revoke devices. Else, listening...")
+    revoke_device(UID, DID, devicePrivateKey, deviceCert, deviceSignature)
