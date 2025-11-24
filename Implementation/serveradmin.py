@@ -44,17 +44,17 @@ def revoke_user():
     print(revoke["result"])
 
 def inbound_socket(uid: int, did: int, masterKey: bytes):
-    HOST = get_local_ip()
+    host = get_local_ip()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, 0))
+        s.bind((host, 0))
         s.listen()
-        PORT = s.getsockname()[-1]
+        port = s.getsockname()[-1]
         resp = requests.post(
             f"{SERVER}/announce", 
-            json={"uid": uid, "did": did, "ip": HOST, "port": PORT}
+            json={"uid": uid, "did": did, "ip": host, "port": port}
         ).json()
         print(resp["result"])
-        print(f"Listener started on {HOST}:{PORT}...")
+        print(f"Listener started on {host}:{port}...")
         while True:
             conn = s.accept()[0] #addr unused
             with conn:
