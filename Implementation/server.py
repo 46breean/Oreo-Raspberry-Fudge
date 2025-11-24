@@ -64,10 +64,6 @@ class AnnounceRequest(BaseModel):
 class AnnounceResponse(BaseModel):
     result: str
 
-class DeviceLocationRequest(BaseModel):
-    uid: int = Query(...)
-    did: int = Query(...)
-
 class DeviceLocationResponse(BaseModel):
     ip: str
     port: int
@@ -168,13 +164,13 @@ def announce(req: AnnounceRequest):
     device_locations[(req.uid, req.did)] = (req.ip, req.port)
     return {"result": "This device's IP and Port have been recorded on the server."}
 
-@app.post("/device_location", response_model = DeviceLocationResponse)
-def device_location(req: DeviceLocationRequest) -> dict[str, int|str]:
-    if (req.uid, req.did) not in device_locations:
+@app.get("/device_location", response_model = DeviceLocationResponse)
+def device_location(uid: int = Query(...), did: int = Query(...)) -> dict[str, int|str]:
+    if (uid, did) not in device_locations:
         raise HTTPException(status_code=404, detail="Device not found")
     
-    ip = device_locations[(req.uid, req.did)][0]
-    port = device_locations[(req.uid, req.did)][1]
+    ip = device_locations[(uid, did)][0]
+    port = device_locations[(uid, did)][1]
     return {"ip": ip, "port": port}
 
 @app.get("/config")
@@ -190,11 +186,10 @@ def init_device(req: InitRequest):
     userConstantDB[(UID, DID)] = constant
     userDataDB[(UID, DID)] = DSK
     nameDB[(UID, DID)] = req.name
-    if req.schoolCert_str:
-        schoolCert_bytes = base64.b64decode(req.schoolCert_str.encode())
-        schoolCert_publicKeyTypes = serialization.load_pem_public_key(schoolCert_bytes)
-        schoolCert = cast(dsa.DSAPublicKey, schoolCert_publicKeyTypes)
-        userCertDB[UID] = schoolCert
+    schoolCert_bytes = base64.b64decode(req.schoolCert_str.encode())
+    schoolCert_publicKeyTypes = serialization.load_pem_public_key(schoolCert_bytes)
+    schoolCert = cast(dsa.DSAPublicKey, schoolCert_publicKeyTypes)
+    userCertDB[UID] = schoolCert
     return {"UID": UID, "DID": DID}
 
 @app.post("/super_init", response_model=SuperInitResponse)
@@ -245,7 +240,6 @@ def revoke_list(uid: int = Query(...), did: int = Query(...)):
         raise HTTPException(status_code=403, detail="Current device has been revoked")
 
     dids = [d for (u, d), dsk in userDataDB.items() if u == uid and dsk is not None]
-    dids[0] = "(User Admin Unrevocable)"
     return {"dids": dids}
 
 @app.post("/revoke", response_model=RevokeResponse)

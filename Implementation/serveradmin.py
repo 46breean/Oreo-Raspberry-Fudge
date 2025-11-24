@@ -65,7 +65,7 @@ def inbound_socket(uid: int, did: int, masterKey: bytes):
                     schoolKey = int.from_bytes(schoolKey_bytes, "big")
                     data_to_send = json.dumps(schoolKey)
                     conn.sendall(data_to_send.encode())
-                    print(f"[User {uid}] User registration completed.")
+                    print(f"[User {uid}] User initialisation completed.")
                 else:
                     print("This functionality has not yet been programmed for.")
 

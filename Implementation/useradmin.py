@@ -3,7 +3,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
 from typing import cast
-import requests, random, math, hashlib, socket, sys, threading, json, base64, os, pickle
+import requests, random, math, hashlib, socket, sys, threading, json, base64, os, pickle, subprocess, tempfile, time
 
 SERVER = "http://172.22.13.14:8000"
 
@@ -69,52 +69,10 @@ def regKeyDev(keyproduct:list[int]):
 
     return base, unused
 
-def handle_registration(uid:int, did:int, keyproduct:list[int], addr:int) -> list[int]|bytes:    
-    print(f"Incoming registration request from {addr}.")
-    regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
-
-    if regreq_ans == 1:
-        while True:
-            new_dk, unused = regKeyDev(keyproduct)
-            register = requests.post(
-                f"{SERVER}/register",
-                json={"uid": uid, "did": did, "unused": unused}
-            )
-            if register.status_code == 409:
-                print("DK invalid, retrying...")
-                continue
-
-            try:
-                register.raise_for_status()
-                register_data = register.json()
-                break
-            except requests.exceptions.HTTPError as e:
-                try:
-                    # Try to extract JSON error detail
-                    err_detail = e.response.json().get("detail", str(e))
-                except ValueError:
-                    # If response is not JSON
-                    err_detail = e.response.text or str(e)
-                print("Registration failed:", err_detail)
-                continue  # try again or break depending on your logic
-
-        new_did:int = register_data["new_did"]
-        data = [new_did, new_dk]
-    else:
-        data = b"REJECTED"
-    return data
-
-def generateDeviceSignature(deviceCert: dsa.DSAPublicKey):
-    deviceCert_bytes = deviceCert.public_bytes(encoding=serialization.Encoding.PEM,format=serialization.PublicFormat.SubjectPublicKeyInfo)
-    deviceSignature = schoolPrivateKey.sign(deviceCert_bytes, hashes.SHA256())
-    return deviceSignature
-
-def encryptData(Data:str, schoolEncKey:bytes) -> str:
-    aes = AESGCMSIV(schoolEncKey)
-    nonce = b"\x00"*12
-    plaintext = Data.encode("utf-8")
-    ciphertext = aes.encrypt(nonce, plaintext, None)
-    return base64.b64encode(ciphertext).decode()
+def generateDeviceSignature(devicecert: dsa.DSAPublicKey, schoolprivatekey:dsa.DSAPrivateKey):
+    deviceCert_bytes = devicecert.public_bytes(encoding=serialization.Encoding.PEM,format=serialization.PublicFormat.SubjectPublicKeyInfo)
+    devicesignature = schoolprivatekey.sign(deviceCert_bytes, hashes.SHA256())
+    return devicesignature
 
 def decryptData(Data:str, schoolEncKey:bytes) -> str:
     aes = AESGCMSIV(schoolEncKey)
@@ -132,10 +90,9 @@ def get_local_ip() -> str:
         s.close()
     return ip
 
-def inbound_socket(uid:int, did:int, keyProduct:list[int]):
+def inbound_socket(uid:int, did:int, keyproduct:list[int], devicecert:dsa.DSAPublicKey, schoolprivatekey:dsa.DSAPrivateKey, schoolenckey:bytes):
     regData: dict[str,int|str]
     plaintextData: dict[str, str]
-    ciphertextData: dict[str, str]
     
     HOST = get_local_ip()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -157,12 +114,33 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
 
                 if deviceMsg == "Register New Device":
                     deviceCert_str:str = data["deviceCert"]
-                    data = handle_registration(uid, did, keyProduct, addr)
+
+                    tmp = tempfile.NamedTemporaryFile(delete=False)
+                    tmp_path = tmp.name
+                    tmp.close()
+
+                    subprocess.Popen([
+                        "start", "cmd", "/c",
+                        sys.executable, "devregistration.py",
+                        str(UID), str(DID),
+                        str(addr),
+                        str(keyproduct), str(tmp_path)
+                    ], shell=True)
+
+                    while not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+                        time.sleep(0.2)
+
+                    with open(tmp_path, "r") as f:
+                        data = json.load(f)
+
+                    os.remove(tmp_path)
+
                     deviceCert_bytes = base64.b64decode(deviceCert_str.encode())
                     deviceCert_publicKeyTypes = serialization.load_pem_public_key(deviceCert_bytes)
-                    deviceCert = cast(dsa.DSAPublicKey, deviceCert_publicKeyTypes)
-                    deviceSignature = generateDeviceSignature(deviceCert)
+                    devicecert = cast(dsa.DSAPublicKey, deviceCert_publicKeyTypes)
+                    deviceSignature = generateDeviceSignature(devicecert, schoolprivatekey)
                     deviceSignature_str = base64.b64encode(deviceSignature).decode()
+
                     regData = {"DID": data[0], "DK": data[1], "deviceSignature_str": deviceSignature_str}
                     conn.sendall(json.dumps(regData).encode())
                     print(f"Device registration for DID {data[0]} completed.")
@@ -170,14 +148,26 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
                 elif deviceMsg == "Encrypt Data":
                     did = data["DID"]
                     plaintextData = data["StudentData"]
-                    ciphertextData = {}
-                    print(f"Incoming data encryption request from (device name) (DID {did}).")
-                    regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
-                    if regreq_ans == 1:
-                        for DataID, Data in plaintextData.items():
-                            ciphertextData[DataID] = encryptData(Data, schoolEncKey)
-                    else:
-                        data = b"REJECTED"
+
+                    tmp = tempfile.NamedTemporaryFile(delete=False)
+                    tmp_path = tmp.name
+                    tmp.close()
+
+                    subprocess.Popen([
+                        "start", "cmd", "/k",
+                        sys.executable, "encryptdata.py",
+                        str(did), str(tmp_path), str(schoolenckey),
+                        str(plaintextData),
+                    ], shell=True)
+
+                    while not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+                        time.sleep(0.2)
+
+                    with open(tmp_path, "r") as f:
+                        ciphertextData = json.load(f)
+
+                    os.remove(tmp_path)
+
                     print("Encryption successful.")
                     conn.sendall(json.dumps(ciphertextData).encode())
                 
@@ -190,7 +180,7 @@ def inbound_socket(uid:int, did:int, keyProduct:list[int]):
                     if regreq_ans == 1:
                         for DataID, Data in ciphertextData.items():
                             print(Data)
-                            plaintextData[DataID] = decryptData(Data, schoolEncKey)
+                            plaintextData[DataID] = decryptData(Data, schoolenckey)
                     else:
                         data = b"REJECTED"
                     print("Decryption successful.")
@@ -204,7 +194,7 @@ def init_reg():
     did: int
     dk: int
     keyproduct: list[int]
-    schoolEncKey: bytes
+    schoolenckey: bytes
     
     while True:
         print("\nSign Up: Initialise user")
@@ -214,31 +204,31 @@ def init_reg():
         dk, unused, keyproduct = selfKeyDev()
 
         #School certificate
-        schoolPrivateKey = dsa.generate_private_key(key_size=2048)
-        schoolCert = schoolPrivateKey.public_key()
-        schoolCert_bytes = schoolCert.public_bytes(
+        schoolprivatekey = dsa.generate_private_key(key_size=2048)
+        schoolcert = schoolprivatekey.public_key()
+        schoolcert_bytes = schoolcert.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
-        schoolCert_str = base64.b64encode(schoolCert_bytes).decode()
+        schoolcert_str = base64.b64encode(schoolcert_bytes).decode()
 
         #Administrator device certificate
-        devicePrivateKey = dsa.generate_private_key(key_size=2048)
-        deviceCert = devicePrivateKey.public_key()
-        deviceSignature = generateDeviceSignature(deviceCert)
+        deviceprivatekey = dsa.generate_private_key(key_size=2048)
+        devicecert = deviceprivatekey.public_key()
+        devicesignature = generateDeviceSignature(devicecert, schoolprivatekey)
 
         #Registration with server
         init = requests.post(
             f"{SERVER}/init", 
-            json={"name": name, "unused": unused, "schoolCert_str": schoolCert_str}
+            json={"name": name, "unused": unused, "schoolCert_str": schoolcert_str}
         ).json()
         uid, did = init["UID"], init["DID"]
 
         #Obtaining school encryption key
         try:
-            loc = requests.post(
+            loc = requests.get(
                 f"{SERVER}/device_location",
-                json={"uid": 1, "did": 1}
+                params={"uid": 1, "did": 1}
             )
             loc.raise_for_status()
         except requests.exceptions.HTTPError as e:
@@ -253,43 +243,43 @@ def init_reg():
             data = json.dumps({"deviceMsg": "Obtain school encryption key", "UID": uid, "DID":did}).encode()
             s.sendall(data)
             print("Connected, awaiting response...")
-            schoolEncKey_int = int(json.loads(s.recv(4096).decode()))
-            schoolEncKey = schoolEncKey_int.to_bytes(32, "big")
+            schoolenckey_int = int(json.loads(s.recv(4096).decode()))
+            schoolenckey = schoolenckey_int.to_bytes(32, "big")
 
         print(f"User registration completed for UID {uid}.")
-        print(f"User Administrator initialised with UID {uid}, DID {did}, School Encryption Key {schoolEncKey}.")
+        print(f"User Administrator initialised with UID {uid}, DID {did}, School Encryption Key {schoolenckey}.")
 
-        return uid, did, dk, keyproduct, schoolEncKey, devicePrivateKey, deviceCert, deviceSignature, schoolPrivateKey, schoolCert
+        return uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolprivatekey, schoolcert
 
 p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729) # pyright: ignore[reportUnknownMemberType]
 
 def runUserAdmin():
-    start_state = load_state()
-    if start_state:
-        uid = start_state["UID"]
-        did = start_state["DID"]
-        dk = start_state["DK"]
-        keyproduct = start_state["keyProduct"]
-        deviceprivatekey = start_state["devicePrivateKey"]
-        devicecert = start_state["deviceCert"]
-        devicesignature = start_state["deviceSignature"]
-        schoolenckey = start_state["schoolEncKey"]
-        schoolprivatekey = start_state["schoolPrivateKey"]
-        schoolcert = start_state["schoolCert"]
-        print("Saved state loaded.")
-    else:
-        print("Fresh state loaded.")
-        uid, did, dk, keyproduct, deviceprivatekey, devicecert, devicesignature, schoolenckey, schoolprivatekey, schoolcert = init_reg()
-        state["UID"] = uid
-        state["DID"] = did
-        state["DK"] = dk
-        state["keyProduct"] = keyproduct
-        state["schoolEncKey"] = schoolenckey
-        state["schoolPrivateKey"] = schoolprivatekey
-        state["schoolCert"] = schoolcert
-        save_state(state)
-    return uid, did, dk, keyproduct, deviceprivatekey, devicecert, devicesignature, schoolenckey, schoolprivatekey, schoolcert
+    # start_state = load_state()
+    # if start_state:
+    #     uid = start_state["UID"]
+    #     did = start_state["DID"]
+    #     dk = start_state["DK"]
+    #     keyproduct = start_state["keyProduct"]
+    #     deviceprivatekey = start_state["devicePrivateKey"]
+    #     devicecert = start_state["deviceCert"]
+    #     devicesignature = start_state["deviceSignature"]
+    #     schoolenckey = start_state["schoolEncKey"]
+    #     schoolprivatekey = start_state["schoolPrivateKey"]
+    #     schoolcert = start_state["schoolCert"]
+    #     print("Saved state loaded.")
+    # else:
+    #     print("Fresh state loaded.")
+        uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolprivatekey, schoolcert = init_reg()
+        # state["UID"] = uid
+        # state["DID"] = did
+        # state["DK"] = dk
+        # state["keyProduct"] = keyproduct
+        # state["schoolEncKey"] = schoolenckey
+        # state["schoolPrivateKey"] = schoolprivatekey
+        # state["schoolCert"] = schoolcert
+        # save_state(state)
+        return uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolenckey, schoolprivatekey, schoolcert
 
 def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devicecert: dsa.DSAPublicKey, devicesignature: bytes):
     try:
@@ -298,10 +288,10 @@ def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devic
             params = {"uid": uid, "did": did}
         )
         revoke_list.raise_for_status()
-        did_list = revoke_list.json()["dids"]
     except requests.exceptions.HTTPError as e:
-        print ("Current device not found")
+        print ("Current device not found", e.response.json()["detail"])
         sys.exit(1)
+    did_list = revoke_list.json()["dids"]
     
     print(f"DIDs of registered, not yet revoked devices: {did_list}")
     did_selection = int(input("Select DID to revoke: "))-1
@@ -322,10 +312,10 @@ def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devic
     ).json()
     print(revocation["result"])
 
-UID, DID, DK, keyProduct, devicePrivateKey, deviceCert, deviceSignature, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
+UID, DID, DK, keyProduct, schoolEncKey, devicePrivateKey, deviceCert, deviceSignature, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
 
 #start listener
-listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct), daemon=False)
+listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct, deviceCert, schoolPrivateKey, schoolEncKey), daemon=False)
 listener_thread.start()
 
 while True:

@@ -53,9 +53,9 @@ def init_reg():
         admin_did = int(input("Enter your administrator DID: "))
 
         try:
-            loc = requests.post(
+            loc = requests.get(
                 f"{SERVER}/device_location",
-                json={"uid": uid, "did": admin_did}
+                params={"uid": uid, "did": admin_did}
             )
             loc.raise_for_status()
             admin_info = loc.json()
@@ -300,31 +300,31 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
             print("Invalid choice.")
 
 def runClient():
-    start_state = load_state()
-    if start_state:
-        uid = start_state["UID"]
-        did = start_state["DID"]
-        admindid = start_state["adminDID"]
-        dk = start_state["DK"]
-        adminip = start_state["adminIP"]
-        adminport = start_state["adminPort"]
-        deviceprivatekey = start_state["devicePrivateKey"]
-        deviceCert = start_state["deviceCert"]
-        deviceSignature = start_state["deviceSignature"]
-        print("Saved state loaded.")
-    else:
-        print("Fresh state loaded.")
-        uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature = init_reg()
-        state["UID"] = uid
-        state["DID"] = did
-        state["adminDID"] = admindid
-        state["DK"] = dk
-        state["adminIP"] = adminip
-        state["adminPort"] = adminport
-        state["devicePrivateKey"] = deviceprivatekey
-        state["deviceCert"] = deviceCert
-        state["deviceSignature"] = deviceSignature
-        save_state(state)
+    # start_state = load_state()
+    # if start_state:
+    #     uid = start_state["UID"]
+    #     did = start_state["DID"]
+    #     admindid = start_state["adminDID"]
+    #     dk = start_state["DK"]
+    #     adminip = start_state["adminIP"]
+    #     adminport = start_state["adminPort"]
+    #     deviceprivatekey = start_state["devicePrivateKey"]
+    #     deviceCert = start_state["deviceCert"]
+    #     deviceSignature = start_state["deviceSignature"]
+    #     print("Saved state loaded.")
+    # else:
+    #     print("Fresh state loaded.")
+    uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature = init_reg()
+        # state["UID"] = uid
+        # state["DID"] = did
+        # state["adminDID"] = admindid
+        # state["DK"] = dk
+        # state["adminIP"] = adminip
+        # state["adminPort"] = adminport
+        # state["devicePrivateKey"] = deviceprivatekey
+        # state["deviceCert"] = deviceCert
+        # state["deviceSignature"] = deviceSignature
+        # save_state(state)
     return uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature
 
 p:int = requests.get(f"{SERVER}/config").json()["p"]
