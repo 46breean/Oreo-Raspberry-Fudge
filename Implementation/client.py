@@ -3,7 +3,7 @@ from primePy import primes # pyright: ignore[reportMissingTypeStubs]
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa
 
-SERVER = "http://192.168.79.5:8000"
+SERVER = "http://172.22.13.14:8000"
 
 state: dict[str, int|str|dsa.DSAPrivateKey|dsa.DSAPublicKey|bytes] = {}
 

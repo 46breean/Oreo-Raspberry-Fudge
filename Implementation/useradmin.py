@@ -5,7 +5,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
 from typing import cast
 import requests, random, math, hashlib, socket, sys, threading, json, base64, os, pickle
 
-SERVER = "http://192.168.79.5:8000"
+SERVER = "http://172.22.13.14:8000"
 
 state: dict[str, int|list[int]|bytes|dsa.DSAPrivateKey|dsa.DSAPublicKey] = {}
 

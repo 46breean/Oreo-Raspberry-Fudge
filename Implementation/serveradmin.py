@@ -3,7 +3,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
 import hashlib, socket, json, requests, threading, os, pickle
 
-SERVER = "http://192.168.79.5:8000"
+SERVER = "http://172.22.13.14:8000"
 
 state: dict[str, bytes|int] = {}
 

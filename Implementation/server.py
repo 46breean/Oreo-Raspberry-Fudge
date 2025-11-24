@@ -245,6 +245,7 @@ def revoke_list(uid: int = Query(...), did: int = Query(...)):
         raise HTTPException(status_code=403, detail="Current device has been revoked")
 
     dids = [d for (u, d), dsk in userDataDB.items() if u == uid and dsk is not None]
+    dids[0] = "(User Admin Unrevocable)"
     return {"dids": dids}
 
 @app.post("/revoke", response_model=RevokeResponse)
