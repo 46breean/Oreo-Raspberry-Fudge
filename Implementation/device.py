@@ -189,11 +189,22 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                         queryResult = tempQueryResult
                     else:
                         queryResult = {k:tempQueryResult[k] for k in queryResult if k in tempQueryResult}
+
+            message_str = "Decrypt Data"
+            message_bytes = message_str.encode()
+            msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
+            msgSignature_str = base64.b64encode(msgSignature).decode()
+            deviceCert_bytes = devicecert.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
+            deviceSignature_str = base64.b64encode(devicesignature).decode()
             
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 print(f"Connecting to administrator device at {adminip}:{adminport} for student data decryption...")
                 s.connect((adminip, adminport))
-                data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult}
+                data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
                 s.sendall(json.dumps(data).encode())
                 SData = json.loads(s.recv(4096).decode())
                 if SData == b"REJECTED":
@@ -209,7 +220,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
             dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
             SData = ast.literal_eval(input("Enter student data in the format {DataID1:'Student Data 1', DataID2:'Student Data 2'}. Input any integer for DataID if inputting new data: "))
             
-            message_str = "EncryptData"
+            message_str = "Encrypt Data"
             message_bytes = message_str.encode()
             msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
             msgSignature_str = base64.b64encode(msgSignature).decode()
@@ -219,11 +230,6 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
             )
             deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
             deviceSignature_str = base64.b64encode(devicesignature).decode()
-
-            revocation = requests.post(
-                f"{SERVER}/revoke",
-                json={"message_str": message_str, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
-            ).json()
 
             # connect to admin device
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

@@ -100,7 +100,6 @@ def get_local_ip() -> str:
 
 def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPublicKey , devicecert:dsa.DSAPublicKey, schoolprivatekey:dsa.DSAPrivateKey, schoolenckey:bytes):
     regData: dict[str,int|str]
-    plaintextData: dict[str, str]
     
     HOST = get_local_ip()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -159,7 +158,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     did = data["DID"]
                     plaintextdata = data["StudentData"]
 
-                    # verifying signature
+                    # verifying device
                     deviceCert_str:str = data["deviceCert_str"]
                     msgSignature_str:str = data["msgSignature_str"]
                     message_str:str = data["message_str"]
@@ -178,6 +177,8 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     
                     signature_bytes = base64.b64decode(msgSignature_str.encode())
                     message_bytes = message_str.encode()
+
+                    # encrypting data
                     ciphertextdata = {}
                     for DataID, Data in plaintextdata.items():
                         ciphertextdata[DataID] = encryptData(Data, schoolenckey)
@@ -186,25 +187,47 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     except InvalidSignature:
                         ciphertextdata = b"REJECTED"
 
-                    # encrypting data
-                    print(f"Incoming data encryption request from (device name) (DID {did}).")
+                    print(f"[Device {did}] Encryption successful.")
 
-                    print("Encryption successful.")
                     conn.sendall(json.dumps(ciphertextdata).encode())
                 
                 elif deviceMsg == "Decrypt Data":
+                    # retrieving DID and SData
                     did = data["DID"]
                     ciphertextData = data["StudentData"]
+
+                    # verifying device
+                    deviceCert_str:str = data["deviceCert_str"]
+                    msgSignature_str:str = data["msgSignature_str"]
+                    message_str:str = data["message_str"]
+                    devicesignature_str:str = data["deviceSignature_str"]
+
+                    deviceCert_bytes = base64.b64decode(deviceCert_str.encode())
+                    deviceCert_publicKeyTypes = serialization.load_pem_public_key(deviceCert_bytes)
+                    deviceCert_DSAPublicKey = cast(dsa.DSAPublicKey, deviceCert_publicKeyTypes)
+                    deviceSignature_bytes = base64.b64decode(devicesignature_str.encode())
+
+                    try:
+                        schoolcert.verify(deviceSignature_bytes, deviceCert_bytes, hashes.SHA256())
+                    except InvalidSignature:
+                        print("Device certificate is invalid. Decryption unauthorised.")
+                        return
+                    
+                    signature_bytes = base64.b64decode(msgSignature_str.encode())
+                    message_bytes = message_str.encode()
+
+                    #decrypting data
                     plaintextData = {}
-                    print(f"Incoming data decryption request from (device name) (DID {did}).")
-                    regreq_ans = int(input("Type 1 to accept request, type any other key to reject request: "))
-                    if regreq_ans == 1:
-                        for DataID, Data in ciphertextData.items():
-                            print(Data)
-                            plaintextData[DataID] = decryptData(Data, schoolenckey)
-                    else:
-                        data = b"REJECTED"
-                    print("Decryption successful.")
+                    for DataID, Data in ciphertextData.items():
+                        print(Data)
+                        plaintextData[DataID] = decryptData(Data, schoolenckey)
+                    try:
+                        deviceCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
+                    except InvalidSignature:
+                        plaintextData = b"REJECTED"
+
+                    print(f"[Device {did}] Decryption successful")
+                    
                     conn.sendall(json.dumps(plaintextData).encode())
                 
                 else:
