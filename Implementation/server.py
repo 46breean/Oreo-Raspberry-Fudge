@@ -332,6 +332,8 @@ def edit_step1(req: EditStep1Request):
         DataID = int(DataID)
         if req.dataEntryType == 1:
             DataID = random.randint(10**7, 10**8 - 1)
+            while DataID in studentDataDB:
+                DataID = random.randint(10*7, 10*8 - 1)
             newDataIDList.append(DataID)
         elif req.dataEntryType == 2:
             if DataID not in studentDataDB:
