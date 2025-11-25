@@ -55,7 +55,7 @@ def handle_registration(uid: int, did: int, keyproduct:list[int], addr:str, tmp_
 
         new_did:int = register_data["new_did"]
         
-        data = [new_did, new_dk, unused]
+        data = [new_did, new_dk]
 
     else:
         data = b"REJECTED"

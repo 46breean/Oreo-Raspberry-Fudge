@@ -2,6 +2,7 @@ from primePy import primes # pyright: ignore[reportMissingTypeStubs]
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
+from cryptography.exceptions import InvalidSignature
 from typing import cast
 import requests, random, math, hashlib, socket, sys, threading, json, base64, os, pickle, subprocess, tempfile, time
 
@@ -74,6 +75,13 @@ def generateDeviceSignature(devicecert: dsa.DSAPublicKey, schoolprivatekey:dsa.D
     devicesignature = schoolprivatekey.sign(deviceCert_bytes, hashes.SHA256())
     return devicesignature
 
+def encryptData(data:str, schoolenckey:bytes) -> str:
+    aes = AESGCMSIV(schoolenckey)
+    nonce = b"\x00"*12
+    plaintext = data.encode("utf-8")
+    ciphertext = aes.encrypt(nonce, plaintext, None)
+    return base64.b64encode(ciphertext).decode()
+
 def decryptData(Data:str, schoolEncKey:bytes) -> str:
     aes = AESGCMSIV(schoolEncKey)
     nonce = b"\x00"*12
@@ -90,7 +98,7 @@ def get_local_ip() -> str:
         s.close()
     return ip
 
-def inbound_socket(uid:int, did:int, keyproduct:list[int], devicecert:dsa.DSAPublicKey, schoolprivatekey:dsa.DSAPrivateKey, schoolenckey:bytes):
+def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPublicKey , devicecert:dsa.DSAPublicKey, schoolprivatekey:dsa.DSAPrivateKey, schoolenckey:bytes):
     regData: dict[str,int|str]
     plaintextData: dict[str, str]
     
@@ -146,30 +154,43 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], devicecert:dsa.DSAPub
                     print(f"Device registration for DID {data[0]} completed.")
                 
                 elif deviceMsg == "Encrypt Data":
+
+                    # retrieving DID and SData
                     did = data["DID"]
-                    plaintextData = data["StudentData"]
+                    plaintextdata = data["StudentData"]
 
-                    tmp = tempfile.NamedTemporaryFile(delete=False)
-                    tmp_path = tmp.name
-                    tmp.close()
+                    # verifying signature
+                    deviceCert_str:str = data["deviceCert_str"]
+                    msgSignature_str:str = data["msgSignature_str"]
+                    message_str:str = data["message_str"]
+                    devicesignature_str:str = data["deviceSignature_str"]
 
-                    subprocess.Popen([
-                        "start", "cmd", "/k",
-                        sys.executable, "encryptdata.py",
-                        str(did), str(tmp_path), str(schoolenckey),
-                        str(plaintextData),
-                    ], shell=True)
+                    deviceCert_bytes = base64.b64decode(deviceCert_str.encode())
+                    deviceCert_publicKeyTypes = serialization.load_pem_public_key(deviceCert_bytes)
+                    deviceCert_DSAPublicKey = cast(dsa.DSAPublicKey, deviceCert_publicKeyTypes)
+                    deviceSignature_bytes = base64.b64decode(devicesignature_str.encode())
 
-                    while not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
-                        time.sleep(0.2)
+                    try:
+                        schoolcert.verify(deviceSignature_bytes, deviceCert_bytes, hashes.SHA256())
+                    except InvalidSignature:
+                        print("Device certificate is invalid. Encryption unauthorised.")
+                        return
+                    
+                    signature_bytes = base64.b64decode(msgSignature_str.encode())
+                    message_bytes = message_str.encode()
+                    ciphertextdata = {}
+                    for DataID, Data in plaintextdata.items():
+                        ciphertextdata[DataID] = encryptData(Data, schoolenckey)
+                    try:
+                        deviceCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
+                    except InvalidSignature:
+                        ciphertextdata = b"REJECTED"
 
-                    with open(tmp_path, "r") as f:
-                        ciphertextData = json.load(f)
-
-                    os.remove(tmp_path)
+                    # encrypting data
+                    print(f"Incoming data encryption request from (device name) (DID {did}).")
 
                     print("Encryption successful.")
-                    conn.sendall(json.dumps(ciphertextData).encode())
+                    conn.sendall(json.dumps(ciphertextdata).encode())
                 
                 elif deviceMsg == "Decrypt Data":
                     did = data["DID"]
@@ -294,7 +315,7 @@ def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devic
     did_list = revoke_list.json()["dids"]
     
     print(f"DIDs of registered, not yet revoked devices: {did_list}")
-    did_selection = int(input("Select DID to revoke: "))-1
+    did_selection = int(input("Select DID to revoke: "))
     revoke_did = int(did_list[did_selection])
     message_str = f"Revoke{revoke_did}"
     message_bytes = base64.b64decode(message_str.encode())
@@ -315,7 +336,7 @@ def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devic
 UID, DID, DK, keyProduct, schoolEncKey, devicePrivateKey, deviceCert, deviceSignature, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
 
 #start listener
-listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct, deviceCert, schoolPrivateKey, schoolEncKey), daemon=False)
+listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct, schoolCert, deviceCert, schoolPrivateKey, schoolEncKey), daemon=False)
 listener_thread.start()
 
 while True:

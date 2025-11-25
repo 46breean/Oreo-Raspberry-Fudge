@@ -268,8 +268,9 @@ def revoke(req: RevokeRequest):
         print("Device certificate is invalid. Revocation unauthorised.")
         return
     
+    message_bytes = req.message_str.encode()
     signature_bytes = base64.b64decode(req.msgSignature_str.encode())
-    message_bytes = base64.b64decode(req.message_str.encode())
+
     try:
         deviceCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
     except InvalidSignature:
