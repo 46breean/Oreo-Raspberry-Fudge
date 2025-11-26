@@ -1,9 +1,9 @@
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
-import hashlib, socket, json, requests, threading, time, os, subprocess, sys, pickle
+import hashlib, socket, json, requests, threading, os, pickle
 
-SERVER = "http://172.22.22.27:8000"
+SERVER = "http://172.22.13.14:8000"
 
 state: dict[str, bytes|int] = {}
 
@@ -26,17 +26,6 @@ def schoolKeyDev(masterKey:bytes, uid:int, did:int) -> bytes:
     schoolKey = HKDF(algorithm = hashes.SHA256(), length = 32, salt = salt, info = b"").derive(masterKey)
     return schoolKey
 
-def runServer():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    pythoncommand = (
-        f"import sys; "
-        f"sys.path.insert(0, r\'{current_dir}\'); "
-        f"import server; "
-        f"server.start_server()"
-    )
-    cmd = f'start cmd /k "{sys.executable} -c \"{pythoncommand}"'
-    subprocess.Popen(cmd, shell=True)
-
 def get_local_ip() -> str:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -52,30 +41,31 @@ def revoke_user():
         f"{SERVER}/super_revoke", 
         json={"uid": uid}
     ).json()
-    print(revoke)
+    print(revoke["result"])
 
-def inbound_socket(uid:int, did:int, masterKey:bytes):
-    HOST = get_local_ip()
+def inbound_socket(uid: int, did: int, masterKey: bytes):
+    host = get_local_ip()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, 0))
+        s.bind((host, 0))
         s.listen()
-        PORT = s.getsockname()[-1]
-        requests.post(
+        port = s.getsockname()[-1]
+        resp = requests.post(
             f"{SERVER}/announce", 
-            json={"uid": uid, "did": did, "ip": HOST, "port": PORT}
-        )
-        print(f"Listener started on {HOST}:{PORT}...")
+            json={"uid": uid, "did": did, "ip": host, "port": port}
+        ).json()
+        print(resp["result"])
+        print(f"Listener started on {host}:{port}...")
         while True:
             conn = s.accept()[0] #addr unused
             with conn:
-                data = json.loads(conn.recv(1024).decode())
+                data = json.loads(conn.recv(4096).decode())
                 deviceMsg, uid, did = data["deviceMsg"], data["UID"], data["DID"]
                 if deviceMsg == "Obtain school encryption key":
                     schoolKey_bytes = schoolKeyDev(masterKey, uid, did)
                     schoolKey = int.from_bytes(schoolKey_bytes, "big")
                     data_to_send = json.dumps(schoolKey)
                     conn.sendall(data_to_send.encode())
-                    print(f"[User {uid}] User registration completed.")
+                    print(f"[User {uid}] User initialisation completed.")
                 else:
                     print("This functionality has not yet been programmed for.")
 
@@ -95,14 +85,9 @@ def runServerAdmin():
         uid = start_state["UID"]
         did = start_state["DID"]
         print("Saved state loaded.")
-        if __name__ == "__main__":
-            runServer()
     else:
         print("Fresh state loaded.")
         masterKey = masterKeyDev()
-        if __name__ == "__main__":
-            runServer()
-        time.sleep(5)
         uid, did = init_reg()
         state["masterKey"] = masterKey
         state["UID"] = uid
@@ -115,3 +100,7 @@ UID, DID, masterKey = runServerAdmin()
 #start listener
 listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, masterKey), daemon=False)
 listener_thread.start()
+
+while True:
+    input("Press enter to revoke devices. Else, listening...")
+    revoke_user()

@@ -1,15 +1,16 @@
 import sys, random, requests, ast, json
 
-SERVER = "http://:8000"
+SERVER = "http://172.22.13.14:8000"
 
-def keyDev(keyproduct):
+def keyDev(keyproduct:list[int]):
     requirement = False
+    bitstring = []
     while requirement == False:
         bitstring = [random.randint(0, 1) for _ in range(100)]
         if bitstring.count(1)>=50 and bitstring.count(1)<=70:
             requirement = True
-    base = 1
-    unused = 1
+    base:int = 1
+    unused:int = 1
 
     for i in range(100):
         if bitstring[i] == 1:
@@ -19,11 +20,9 @@ def keyDev(keyproduct):
 
     return base, unused
 
-def handle_registration(UID, DID, newdev_ms, keyproduct, addr, tmp_path):
-    print(f"[Device {DID}] Incoming registration request from {addr}")
-    print("\nRegistration Request:", newdev_ms)
-    print("1. Accept Request")
-    print("2. Reject Request")
+def handle_registration(uid: int, did: int, keyproduct:list[int], addr:str, tmp_path:str):
+    print(f"Incoming registration request from {addr}")
+    print("Type '1' to accept request, type anything else to reject request.")
 
     regreq_ans = int(input("Would you like to register this device? "))
 
@@ -33,7 +32,7 @@ def handle_registration(UID, DID, newdev_ms, keyproduct, addr, tmp_path):
             new_dk, unused = keyDev(keyproduct)
             register = requests.post(
                 f"{SERVER}/register",
-                json={"uid": UID, "did": DID, "unused": unused}
+                json={"uid": uid, "did": did, "unused": unused}
             )
 
             if register.status_code == 409:
@@ -54,11 +53,11 @@ def handle_registration(UID, DID, newdev_ms, keyproduct, addr, tmp_path):
                 print("Registration failed:", err_detail)
                 continue  # try again or break depending on your logic
 
-        new_did = register_data["new_did"]
+        new_did:int = register_data["new_did"]
         
-        data = [new_did, new_dk, unused]
+        data = [new_did, new_dk]
 
-    elif regreq_ans == 2:
+    else:
         data = b"REJECTED"
 
     with open(tmp_path, "w") as f:
@@ -67,9 +66,9 @@ def handle_registration(UID, DID, newdev_ms, keyproduct, addr, tmp_path):
     input("\nPress Enter to continue...")
 
 
-UID, DID, addr, newdev_ms, keyproduct, tmp_path = sys.argv[1:]
-UID = int(UID)
-DID = int(DID)
+uid, did, addr, keyproduct, tmp_path = sys.argv[1:]
+uid = int(uid)
+did = int(did)
 keyproduct = ast.literal_eval(keyproduct)
 
-handle_registration(UID, DID, newdev_ms, keyproduct, addr, tmp_path)
+handle_registration(uid, did, keyproduct, addr, tmp_path)
