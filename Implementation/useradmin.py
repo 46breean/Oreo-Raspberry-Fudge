@@ -128,7 +128,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     subprocess.Popen([
                         "start", "cmd", "/c",
                         sys.executable, "devregistration.py",
-                        str(UID), str(DID),
+                        str(uid), str(did),
                         str(addr),
                         str(keyproduct), str(tmp_path)
                     ], shell=True)
@@ -298,7 +298,7 @@ def init_reg():
         #Registration with server
         requests.post(
             f"{SERVER}/init", 
-            json={"name": name, "unused": unused, "schoolCert_str": schoolcert_str, "UID": uid, "DID":did}
+            json={"name": name, "unused": unused, "schoolCert_str": schoolcert_str, "uid": uid, "did":did}
         ).json()        
 
         print(f"User Administrator of {name} initialised with UID {uid}, DID {did}, school encryption key.")

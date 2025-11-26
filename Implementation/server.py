@@ -61,9 +61,6 @@ class AnnounceRequest(BaseModel):
     ip: str
     port: int
 
-class AnnounceResponse(BaseModel):
-    result: str
-
 class DeviceLocationResponse(BaseModel):
     ip: str
     port: int
@@ -157,7 +154,7 @@ class EditStep3Response(BaseModel):
     result: str
 
 # endpoints
-@app.post("/announce", response_model=AnnounceResponse)
+@app.post("/announce")
 def announce(req: AnnounceRequest):
     device_locations[(req.uid, req.did)] = (req.ip, req.port)
     return
