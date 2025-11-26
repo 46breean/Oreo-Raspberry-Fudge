@@ -69,13 +69,11 @@ class DeviceLocationResponse(BaseModel):
     port: int
 
 class InitRequest(BaseModel):
+    uid: int
+    did: int
     unused: int
     name: str = Query(...)
     schoolCert_str: str
-
-class InitResponse(BaseModel):
-    UID: int
-    DID: int
 
 class SuperInitRequest(BaseModel):
     name: str = Query(...)
@@ -162,7 +160,7 @@ class EditStep3Response(BaseModel):
 @app.post("/announce", response_model=AnnounceResponse)
 def announce(req: AnnounceRequest):
     device_locations[(req.uid, req.did)] = (req.ip, req.port)
-    return {"result": "This device's IP and Port have been recorded on the server."}
+    return
 
 @app.get("/device_location", response_model = DeviceLocationResponse)
 def device_location(uid: int = Query(...), did: int = Query(...)) -> dict[str, int|str]:
@@ -177,20 +175,20 @@ def device_location(uid: int = Query(...), did: int = Query(...)) -> dict[str, i
 def get_config():
     return {"p": P}
 
-@app.post("/init", response_model=InitResponse)
+@app.post("/init")
 def init_device(req: InitRequest):
     constant = random.randint(1, 100000)
-    UID = random.randint(10**9, 10**10 - 1)
-    DID = random.randint(10**9, 10**10 - 1)
+    UID = req.uid
+    DID = req.did
     DSK = req.unused*constant
-    userConstantDB[(UID, DID)] = constant
-    userDataDB[(UID, DID)] = DSK
-    nameDB[(UID, DID)] = req.name
     schoolCert_bytes = base64.b64decode(req.schoolCert_str.encode())
     schoolCert_publicKeyTypes = serialization.load_pem_public_key(schoolCert_bytes)
     schoolCert = cast(dsa.DSAPublicKey, schoolCert_publicKeyTypes)
+    userConstantDB[(UID, DID)] = constant
+    userDataDB[(UID, DID)] = DSK
+    nameDB[(UID, DID)] = req.name
     userCertDB[UID] = schoolCert
-    return {"UID": UID, "DID": DID}
+    return
 
 @app.post("/super_init", response_model=SuperInitResponse)
 def super_init(req: SuperInitRequest):

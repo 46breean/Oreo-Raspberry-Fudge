@@ -106,11 +106,10 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
         s.bind((HOST, 0))
         s.listen()
         PORT = s.getsockname()[-1]
-        resp = requests.post(
+        requests.post(
             f"{SERVER}/announce", 
             json={"uid": uid, "did": did, "ip": HOST, "port": PORT}
         ).json()
-        print(resp["result"])
         print(f"Listener started on {HOST}:{PORT}...")
 
         while True:
@@ -240,10 +239,12 @@ def init_reg():
     schoolenckey: bytes
     
     while True:
-        print("\nSign Up: Initialise user")
-        input("Press Enter to start initialisation: ")
-        name = "Administrator"
-        print(f"Device name: {name}")
+        print("\n======Initialise user======")
+        name = str(input("Input username: "))
+        otp = str(input("Input OTP for initialisation: "))
+
+        uid = random.randint(10**9, 10**10 - 1)
+        did = random.randint(10**9, 10**10 - 1)
         dk, unused, keyproduct = selfKeyDev()
 
         #School certificate
@@ -260,14 +261,6 @@ def init_reg():
         devicecert = deviceprivatekey.public_key()
         devicesignature = generateDeviceSignature(devicecert, schoolprivatekey)
 
-        #Registration with server
-        init = requests.post(
-            f"{SERVER}/init", 
-            json={"name": name, "unused": unused, "schoolCert_str": schoolcert_str}
-        ).json()
-        uid, did = init["UID"], init["DID"]
-
-        #Obtaining school encryption key
         try:
             loc = requests.get(
                 f"{SERVER}/device_location",
@@ -280,17 +273,35 @@ def init_reg():
         referral_info = loc.json()
         referral_ip = referral_info["ip"]
         referral_port = referral_info["port"]
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print(f"Connecting to server administrator at {referral_ip}:{referral_port} to obtain school encryption key...")
             s.connect((referral_ip, referral_port))
-            data = json.dumps({"deviceMsg": "Obtain school encryption key", "UID": uid, "DID":did}).encode()
+            data = json.dumps({"Username": name, "OTP": otp, "deviceMsg": "Obtain school encryption key", "UID": uid, "DID":did}).encode()
             s.sendall(data)
             print("Connected, awaiting response...")
-            schoolenckey_int = int(json.loads(s.recv(4096).decode()))
-            schoolenckey = schoolenckey_int.to_bytes(32, "big")
 
-        print(f"User registration completed for UID {uid}.")
-        print(f"User Administrator initialised with UID {uid}, DID {did}, School Encryption Key {schoolenckey}.")
+            raw = s.recv(4096)
+            if not raw:
+                print("Server closed connection unexpectedly")
+                sys.exit(1)
+
+            response = json.loads(raw.decode())
+            if response == "REJECTED":
+                print("Incorrect OTP. Initialisation failed.")
+                sys.exit(1)
+            else:
+                print("Correct OTP. Beginning initialisation...")
+                schoolenckey_int = int(response)
+                schoolenckey = schoolenckey_int.to_bytes(32, "big") 
+
+        #Registration with server
+        requests.post(
+            f"{SERVER}/init", 
+            json={"name": name, "unused": unused, "schoolCert_str": schoolcert_str, "UID": uid, "DID":did}
+        ).json()        
+
+        print(f"User Administrator of {name} initialised with UID {uid}, DID {did}, school encryption key.")
 
         return uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolprivatekey, schoolcert
 
