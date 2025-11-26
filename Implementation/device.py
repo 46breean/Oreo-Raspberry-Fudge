@@ -38,7 +38,7 @@ def get_local_ip():
         s.close()
     return ip
 
-def dev_reg():
+def registration():
     uid: int
     did: int
     admin_did: int
@@ -95,46 +95,14 @@ def dev_reg():
 def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, deviceprivatekey: dsa.DSAPrivateKey, devicecert: dsa.DSAPublicKey, devicesignature: bytes):
     while True:
         print("\nDevice Menu:")
-        print("1. Revoke device")
-        print("2. Evaluate and Query")
-        print("3. Edit Database")
-        print("4. Exit")
+        print("1. Evaluate and Query")
+        print("2. Edit Database")
+        print("3. Exit")
         choice = int(input("Select function: "))
 
         try:
-            if choice == 1:
-                revoke_did: int
-                try:
-                    revoke_list = requests.get(
-                        f"{SERVER}/revoke_list",
-                        params = {"uid": uid, "did": did}
-                    )
-                    revoke_list.raise_for_status()
-                    did_list = revoke_list.json()["dids"]
-                except requests.exceptions.HTTPError as e:
-                    print ("Current device not found")
-                    sys.exit(1)
-                
-                print(f"DIDs of registered, not yet revoked devices: {did_list}")
-                did_selection = int(input("Select DID to revoke: "))
-                revoke_did = did_selection
-                message_str = f"Revoke{revoke_did}"
-                message_bytes = message_str.encode()
-                msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
-                msgSignature_str = base64.b64encode(msgSignature).decode()
-                deviceCert_bytes = devicecert.public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                )
-                deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
-                deviceSignature_str = base64.b64encode(devicesignature).decode()
-                revocation = requests.post(
-                    f"{SERVER}/revoke",
-                    json={"uid": uid, "did": did, "revoke_did": revoke_did, "message_str": message_str, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
-                ).json()
-                print(revocation)
             
-            elif choice == 2:
+            if choice == 1:
                 queryResult: dict[str, str] = {}
                 data: dict[str, str|int|dict[str, str]]
                 
@@ -223,7 +191,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
             
                 print(f"Student Data requested: \n{StudentData}")
 
-            elif choice == 3:
+            elif choice == 2:
                 dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
                 SData = ast.literal_eval(input("Enter student data in the format {DataID1:'Student Data 1', DataID2:'Student Data 2'}. Input any integer for DataID if inputting new data: "))
                 
@@ -321,7 +289,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                         input("Press Enter to continue...")
                         return
 
-            elif choice == 4:
+            elif choice == 3:
                 print("Goodbye!")
                 break
             
@@ -345,7 +313,7 @@ def runClient():
     #     print("Saved state loaded.")
     # else:
     #     print("Fresh state loaded.")
-    uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature = dev_reg()
+    uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature = registration()
         # state["UID"] = uid
         # state["DID"] = did
         # state["adminDID"] = admindid

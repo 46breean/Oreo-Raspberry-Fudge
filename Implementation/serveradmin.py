@@ -7,7 +7,7 @@ import hashlib
 SERVER = "http://172.22.13.14:8000"
 state: dict[str, bytes|int] = {}
 active_otps: dict[str, int|None] = {}
-
+unrevoked_uids: dict[str, int|None] = {}
 
 def save_state(state: dict[str, bytes|int], filename:str='serveradmin_state.pk1'):
     with open(filename, "wb") as f:
@@ -40,9 +40,19 @@ def get_local_ip() -> str:
 
 
 def revoke_user():
-    uid = input("Enter UID that is to be revoked: ")
-    revoke = requests.post(f"{SERVER}/super_revoke", json={"uid": uid}).json()
+
+    names = [name for (name), uid in unrevoked_uids.items() if uid is not None]
+
+    print("\nList of unrevoked users:")
+    print(names)
+
+    username = input("Enter user to be revoked: ")
+    revoke_uid = unrevoked_uids[username]
+
+    revoke = requests.post(f"{SERVER}/super_revoke", json={"uid": revoke_uid}).json()
     print(revoke.get("result", "No response"))
+
+    unrevoked_uids[username] = None
 
 
 def handle_user_connection(conn: socket.socket, masterEncKey: bytes):
@@ -84,6 +94,9 @@ def handle_user_connection(conn: socket.socket, masterEncKey: bytes):
 
                     conn.sendall(json.dumps(schoolEncKey).encode())
 
+                    print(f"[{uid} {username}] initialised successfully.")
+                    unrevoked_uids[username] = uid
+
         except Exception as e:
             print(f"Error handling connnection: {e}")
 
@@ -97,7 +110,7 @@ def user_listener(uid: int, did: int, masterEncKey: bytes):
         # Announce listener to server
         requests.post(f"{SERVER}/announce", json={"uid": uid, "did": did, "ip": host, "port": port})
 
-        print(f"User listener running on {host}:{port}")
+        print(f"\nUser listener running on {host}:{port}")
 
         while True:
             conn, _ = s.accept()
@@ -131,7 +144,7 @@ def runServerAdmin():
 # ----------------- MAIN -----------------
 UID, DID, masterEncKey = runServerAdmin()
 
-# Start listener thread once (can handle multiple users)
+# Start listener thread once
 listener_thread = threading.Thread(target=user_listener, args=(UID, DID, masterEncKey), daemon=True)
 listener_thread.start()
 
@@ -139,12 +152,12 @@ while True:
     print("\nServer Administrator Menu:")
     print("1. Initialise new user.")
     print("2. Revoke user.")
-    choice = input("Select function: ")
+    choice = input("Select function...")
 
     try:
         choice = int(choice)
         if choice == 1:
-            username = str(input("Enter new username:"))
+            username = str(input("Enter new username: "))
             if username in active_otps.keys():
                 print("Username taken. Please choose another username.")
                 continue
@@ -152,7 +165,7 @@ while True:
             otp = random.randint(10**7, 10**8 - 1)
             active_otps[username] = otp
 
-            print(f"Initialising new user. \n Username:{username} \n OTP: {otp}")
+            print(f"Initialising new user. \n Username: {username} \n OTP: {otp}")
 
         elif choice == 2:
             revoke_user()

@@ -231,7 +231,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                 else:
                     print("This functionality has not yet been programmed for.")
 
-def init_reg():
+def initialisation():
     uid: int
     did: int
     dk: int
@@ -324,7 +324,7 @@ def runUserAdmin():
     #     print("Saved state loaded.")
     # else:
     #     print("Fresh state loaded.")
-        uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolprivatekey, schoolcert = init_reg()
+        uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolprivatekey, schoolcert = initialisation()
         # state["UID"] = uid
         # state["DID"] = did
         # state["DK"] = dk
@@ -344,7 +344,7 @@ def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devic
         revoke_list.raise_for_status()
         did_list = revoke_list.json()["dids"]
     except requests.exceptions.HTTPError as e:
-        print ("Current device not found", e.response.json()["detail"])
+        print ("Revocation failed:", e.response.json()["detail"])
         sys.exit(1)
     
     print(f"DIDs of registered, not yet revoked devices: {did_list}")
