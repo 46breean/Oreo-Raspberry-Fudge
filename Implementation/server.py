@@ -214,7 +214,6 @@ def register_device(req: RegisterRequest):
     if new_dsk in existing_dsks:
         raise HTTPException(status_code=409, detail="DK generated is invalid")
 
-
     existing_dids = [d for (u, d), _ in userDataDB.items() if u == req.uid]
     while True:
         new_did = random.randint(10**9, 10**10 - 1)
@@ -223,7 +222,6 @@ def register_device(req: RegisterRequest):
 
     userDataDB[(req.uid, new_did)] = new_dsk
     userConstantDB[req.uid, new_did] = DSK_constant
-
     return {"new_did": new_did}
 
 @app.get("/revoke_list", response_model=RevokeListResponse)
@@ -318,7 +316,6 @@ def eval_step2(req: EvalStep2Request):
             raise HTTPException(status_code=400,detail="No student found.")
         SData = studentDataDB[intID]
         query_result[intID] = SData
-
     return {"query_result": query_result}
     
 @app.post("/edit/step1", response_model=EditStep1Response)
@@ -349,9 +346,7 @@ def edit_step2(req: EditStep2Request):
 
     r2 = random_coprime(P - 1)
     r2_store[key] = r2
-
     blinded2 = pow(req.blinded, DSK * r2, P)
-    
     return {"blinded2": blinded2}
 
 @app.post("/edit/step3", response_model=EditStep3Response)
@@ -378,7 +373,6 @@ def edit_step3(req: EditStep3Request):
                 indexDataDB[final_value] = intDataID
             else:
                 raise HTTPException(status_code=400, detail="You cannot remove data IDs from a non-existent index.")
-
     return{"result": "successful"}
 
 if __name__ == "__main__":

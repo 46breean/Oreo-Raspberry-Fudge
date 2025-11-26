@@ -119,7 +119,6 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
 
                 if deviceMsg == "Register New Device":
                     deviceCert_str:str = data["deviceCert"]
-
                     tmp = tempfile.NamedTemporaryFile(delete=False)
                     tmp_path = tmp.name
                     tmp.close()
@@ -134,10 +133,8 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
 
                     while not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
                         time.sleep(0.2)
-
                     with open(tmp_path, "r") as f:
                         data = json.load(f)
-
                     os.remove(tmp_path)
 
                     deviceCert_bytes = base64.b64decode(deviceCert_str.encode())
@@ -151,7 +148,6 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     print(f"\nDevice registration for DID {data[0]} completed.")
                 
                 elif deviceMsg == "Encrypt Data":
-
                     # retrieving DID and SData
                     did = data["DID"]
                     plaintextdata = data["StudentData"]
@@ -224,7 +220,6 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         plaintextData = b"REJECTED"
 
                     print(f"\n[Device {did}] Decryption successful")
-                    
                     conn.sendall(json.dumps(plaintextData).encode())
                 
                 else:
@@ -304,36 +299,6 @@ def initialisation():
 
         return uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolprivatekey, schoolcert
 
-p = requests.get(f"{SERVER}/config").json()["p"]
-primeList = primes.upto(104729) # pyright: ignore[reportUnknownMemberType]
-
-def runUserAdmin():
-    # start_state = load_state()
-    # if start_state:
-    #     uid = start_state["UID"]
-    #     did = start_state["DID"]
-    #     dk = start_state["DK"]
-    #     keyproduct = start_state["keyProduct"]
-    #     deviceprivatekey = start_state["devicePrivateKey"]
-    #     devicecert = start_state["deviceCert"]
-    #     devicesignature = start_state["deviceSignature"]
-    #     schoolenckey = start_state["schoolEncKey"]
-    #     schoolprivatekey = start_state["schoolPrivateKey"]
-    #     schoolcert = start_state["schoolCert"]
-    #     print("Saved state loaded.")
-    # else:
-    #     print("Fresh state loaded.")
-        uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolprivatekey, schoolcert = initialisation()
-        # state["UID"] = uid
-        # state["DID"] = did
-        # state["DK"] = dk
-        # state["keyProduct"] = keyproduct
-        # state["schoolEncKey"] = schoolenckey
-        # state["schoolPrivateKey"] = schoolprivatekey
-        # state["schoolCert"] = schoolcert
-        # save_state(state)
-        return uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolenckey, schoolprivatekey, schoolcert
-
 def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devicecert: dsa.DSAPublicKey, devicesignature: bytes):
     try:
         revoke_list = requests.get(
@@ -364,6 +329,36 @@ def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devic
         json={"uid": uid, "did": did, "revoke_did": revoke_did, "message_str": message_str, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
     ).json()
     print(revocation)
+
+p = requests.get(f"{SERVER}/config").json()["p"]
+primeList = primes.upto(104729) # pyright: ignore[reportUnknownMemberType]
+
+def runUserAdmin():
+    # start_state = load_state()
+    # if start_state:
+    #     uid = start_state["UID"]
+    #     did = start_state["DID"]
+    #     dk = start_state["DK"]
+    #     keyproduct = start_state["keyProduct"]
+    #     deviceprivatekey = start_state["devicePrivateKey"]
+    #     devicecert = start_state["deviceCert"]
+    #     devicesignature = start_state["deviceSignature"]
+    #     schoolenckey = start_state["schoolEncKey"]
+    #     schoolprivatekey = start_state["schoolPrivateKey"]
+    #     schoolcert = start_state["schoolCert"]
+    #     print("Saved state loaded.")
+    # else:
+    #     print("Fresh state loaded.")
+        uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolprivatekey, schoolcert = initialisation()
+        # state["UID"] = uid
+        # state["DID"] = did
+        # state["DK"] = dk
+        # state["keyProduct"] = keyproduct
+        # state["schoolEncKey"] = schoolenckey
+        # state["schoolPrivateKey"] = schoolprivatekey
+        # state["schoolCert"] = schoolcert
+        # save_state(state)
+        return uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolenckey, schoolprivatekey, schoolcert
 
 UID, DID, DK, keyProduct, schoolEncKey, devicePrivateKey, deviceCert, deviceSignature, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
 

@@ -48,7 +48,6 @@ def registration():
     
     while True:
         print("\nSign Up: Register new device")
-
         uid = int(input("Enter your UID: "))
         admin_did = int(input("Enter your administrator DID: "))
 
@@ -101,7 +100,6 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
         choice = int(input("Select function: "))
 
         try:
-            
             if choice == 1:
                 queryResult: dict[str, str] = {}
                 data: dict[str, str|int|dict[str, str]]
@@ -111,7 +109,6 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 print("2. AND query: only results that satisfy all given conditions")
                 print("3. OR query: results that satisfy at least one given condition (i.e. multiple discrete single queries)")
                 queryType = int(input("Select your query type (1/2/3): "))
-
                 indexes = [index.strip() for index in input("Enter student data quer(ies) separated by commas: ").split(",")]
                 for index in indexes:
                     intIndex = int(index)
@@ -255,7 +252,6 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                     print(f"\nCurrently editing: index {index}.")
                     hashed_index = hash_int(index) % p
                     r1 = random_coprime(p - 1)
-
                     blinded = pow(hashed_index, dk * r1, p)
 
                     try:
