@@ -176,17 +176,16 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                     s.connect((adminip, adminport))
                     data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
                     s.sendall(json.dumps(data).encode())
-                    SData = json.loads(s.recv(4096).decode())
-                    if SData == b"REJECTED":
+                    plaintextSData = json.loads(s.recv(4096).decode())
+                    if plaintextSData == b"REJECTED":
                         print("[Administrator] Decryption Request Rejected, device has been revoked.")
                         sys.exit(1)
                     else:
                         print("[Administrator] Decryption Request Accepted.")
-                        StudentData:dict[int,str] = {}
-                        for DataID, Data in list(SData.items()):
-                            StudentData[int(DataID)] = Data
-            
-                print(f"\nStudent Data requested: \n{StudentData}")
+                        studentData: dict[int,str] = {}
+                        for DataID, Data in list(plaintextSData.items()):
+                            studentData[int(DataID)] = Data
+                print(f"\nStudent Data requested: \n{studentData}")
 
             elif choice == 2:
                 dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))

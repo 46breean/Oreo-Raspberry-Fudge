@@ -100,8 +100,6 @@ class RevokeRequest(BaseModel):
     revoke_did: int
     message_str: str
     msgSignature_str: str
-    deviceCert_str: str
-    deviceSignature_str: str
 
 class RevokeResponse(BaseModel):
     result: str
@@ -249,23 +247,11 @@ def revoke(req: RevokeRequest):
     elif userDataDB[target] is None:
         raise HTTPException(status_code=409, detail="Target device already revoked")
     
-    print(userCertDB)
     schoolCert = userCertDB[req.uid]
-    deviceCert_bytes = base64.b64decode(req.deviceCert_str.encode())
-    deviceCert_publicKeyTypes = serialization.load_pem_public_key(deviceCert_bytes)
-    deviceCert_DSAPublicKey = cast(dsa.DSAPublicKey, deviceCert_publicKeyTypes)
-    deviceSignature_bytes = base64.b64decode(req.deviceSignature_str.encode())
-    try:
-        schoolCert.verify(deviceSignature_bytes, deviceCert_bytes, hashes.SHA256())
-    except InvalidSignature:
-        print("Device certificate is invalid. Revocation unauthorised.")
-        return
-    
     message_bytes = req.message_str.encode()
-    signature_bytes = base64.b64decode(req.msgSignature_str.encode())
-
+    msgSignature_bytes = base64.b64decode(req.msgSignature_str.encode())
     try:
-        deviceCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
+        schoolCert.verify(msgSignature_bytes, message_bytes, hashes.SHA256())
     except InvalidSignature:
         print("Signature is invalid. Revocation unauthorised.")
         return

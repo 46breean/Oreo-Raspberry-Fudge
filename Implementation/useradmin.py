@@ -115,10 +115,10 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
             conn, addr = s.accept()
             with conn:
                 data = json.loads(conn.recv(4096).decode())
-                deviceMsg:str = data["deviceMsg"]
+                deviceMsg: str = data["deviceMsg"]
 
                 if deviceMsg == "Register New Device":
-                    deviceCert_str:str = data["deviceCert"]
+                    deviceCert_str: str = data["deviceCert"]
                     tmp = tempfile.NamedTemporaryFile(delete=False)
                     tmp_path = tmp.name
                     tmp.close()
@@ -150,13 +150,13 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                 elif deviceMsg == "Encrypt Data":
                     # retrieving DID and SData
                     did = data["DID"]
-                    plaintextdata = data["StudentData"]
+                    plaintextdata: dict[str, str] = data["StudentData"]
 
                     # verifying device
-                    deviceCert_str:str = data["deviceCert_str"]
-                    msgSignature_str:str = data["msgSignature_str"]
-                    message_str:str = data["message_str"]
-                    devicesignature_str:str = data["deviceSignature_str"]
+                    deviceCert_str: str = data["deviceCert_str"]
+                    msgSignature_str: str = data["msgSignature_str"]
+                    message_str: str = data["message_str"]
+                    devicesignature_str: str = data["deviceSignature_str"]
 
                     deviceCert_bytes = base64.b64decode(deviceCert_str.encode())
                     deviceCert_publicKeyTypes = serialization.load_pem_public_key(deviceCert_bytes)
@@ -169,32 +169,31 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         print("Device certificate is invalid. Encryption unauthorised.")
                         return
                     
-                    signature_bytes = base64.b64decode(msgSignature_str.encode())
+                    msgSignature_bytes = base64.b64decode(msgSignature_str.encode())
                     message_bytes = message_str.encode()
+
+                    try:
+                        deviceCert_DSAPublicKey.verify(msgSignature_bytes, message_bytes, hashes.SHA256())
+                    except InvalidSignature:
+                        ciphertextdata = b"REJECTED"
 
                     # encrypting data
                     ciphertextdata = {}
                     for DataID, Data in plaintextdata.items():
                         ciphertextdata[DataID] = encryptData(Data, schoolenckey)
-                    try:
-                        deviceCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
-                    except InvalidSignature:
-                        ciphertextdata = b"REJECTED"
-
                     print(f"\n[Device {did}] Encryption successful.")
-
                     conn.sendall(json.dumps(ciphertextdata).encode())
                 
                 elif deviceMsg == "Decrypt Data":
                     # retrieving DID and SData
                     did = data["DID"]
-                    ciphertextData = data["StudentData"]
+                    ciphertextData: dict[str, str] = data["StudentData"]
 
                     # verifying device
-                    deviceCert_str:str = data["deviceCert_str"]
-                    msgSignature_str:str = data["msgSignature_str"]
-                    message_str:str = data["message_str"]
-                    devicesignature_str:str = data["deviceSignature_str"]
+                    deviceCert_str: str = data["deviceCert_str"]
+                    msgSignature_str: str = data["msgSignature_str"]
+                    message_str: str = data["message_str"]
+                    devicesignature_str: str = data["deviceSignature_str"]
 
                     deviceCert_bytes = base64.b64decode(deviceCert_str.encode())
                     deviceCert_publicKeyTypes = serialization.load_pem_public_key(deviceCert_bytes)
@@ -210,14 +209,15 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     signature_bytes = base64.b64decode(msgSignature_str.encode())
                     message_bytes = message_str.encode()
 
-                    #decrypting data
-                    plaintextData = {}
-                    for DataID, Data in ciphertextData.items():
-                        plaintextData[DataID] = decryptData(Data, schoolenckey)
                     try:
                         deviceCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
                     except InvalidSignature:
                         plaintextData = b"REJECTED"
+
+                    #decrypting data
+                    plaintextData = {}
+                    for DataID, Data in ciphertextData.items():
+                        plaintextData[DataID] = decryptData(Data, schoolenckey)
 
                     print(f"\n[Device {did}] Decryption successful")
                     conn.sendall(json.dumps(plaintextData).encode())
@@ -249,11 +249,6 @@ def initialisation():
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
         schoolcert_str = base64.b64encode(schoolcert_bytes).decode()
-
-        #Administrator device certificate
-        deviceprivatekey = dsa.generate_private_key(key_size=2048)
-        devicecert = deviceprivatekey.public_key()
-        devicesignature = generateDeviceSignature(devicecert, schoolprivatekey)
 
         try:
             loc = requests.get(
@@ -297,9 +292,9 @@ def initialisation():
 
         print(f"\nUser Administrator of {name} initialised with UID {uid}, DID {did}, school encryption key.")
 
-        return uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolprivatekey, schoolcert
+        return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert
 
-def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devicecert: dsa.DSAPublicKey, devicesignature: bytes):
+def revoke_device(uid: int, did: int, schoolprivatekey: dsa.DSAPrivateKey):
     try:
         revoke_list = requests.get(
             f"{SERVER}/revoke_list",
@@ -312,23 +307,16 @@ def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devic
         sys.exit(1)
     
     print(f"DIDs of registered, not yet revoked devices: {did_list}")
-    did_selection = int(input("Select DID to revoke: "))
-    revoke_did = did_selection
-    message_str = f"Revoke{revoke_did}"
+    revoke_did = int(input("Select DID to revoke: "))
+    message_str = f"Revoke {revoke_did}"
     message_bytes = message_str.encode()
-    msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
+    msgSignature = schoolprivatekey.sign(message_bytes, hashes.SHA256())
     msgSignature_str = base64.b64encode(msgSignature).decode()
-    deviceCert_bytes = devicecert.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
-    deviceSignature_str = base64.b64encode(devicesignature).decode()
     revocation = requests.post(
         f"{SERVER}/revoke",
-        json={"uid": uid, "did": did, "revoke_did": revoke_did, "message_str": message_str, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
+        json={"uid": uid, "did": did, "revoke_did": revoke_did, "message_str": message_str, "msgSignature_str": msgSignature_str}
     ).json()
-    print(revocation)
+    print(revocation["result"])
 
 p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729) # pyright: ignore[reportUnknownMemberType]
@@ -349,7 +337,7 @@ def runUserAdmin():
     #     print("Saved state loaded.")
     # else:
     #     print("Fresh state loaded.")
-        uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolprivatekey, schoolcert = initialisation()
+        uid, did, dk, keyproduct, schoolenckey,schoolprivatekey, schoolcert = initialisation()
         # state["UID"] = uid
         # state["DID"] = did
         # state["DK"] = dk
@@ -358,14 +346,14 @@ def runUserAdmin():
         # state["schoolPrivateKey"] = schoolprivatekey
         # state["schoolCert"] = schoolcert
         # save_state(state)
-        return uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolenckey, schoolprivatekey, schoolcert
+        return uid, did, dk, keyproduct, schoolenckey, schoolenckey, schoolprivatekey, schoolcert
 
-UID, DID, DK, keyProduct, schoolEncKey, devicePrivateKey, deviceCert, deviceSignature, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
+UID, DID, DK, keyProduct, schoolEncKey, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
 
 #start listener
-listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct, schoolCert, deviceCert, schoolPrivateKey, schoolEncKey), daemon=False)
+listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct, schoolCert, schoolPrivateKey, schoolEncKey), daemon=False)
 listener_thread.start()
 
 while True:
     input("\nPress enter to revoke devices.")
-    revoke_device(UID, DID, devicePrivateKey, deviceCert, deviceSignature)
+    revoke_device(UID, DID, schoolPrivateKey)
