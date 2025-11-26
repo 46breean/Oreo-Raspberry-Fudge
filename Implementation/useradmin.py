@@ -219,7 +219,6 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     #decrypting data
                     plaintextData = {}
                     for DataID, Data in ciphertextData.items():
-                        print(Data)
                         plaintextData[DataID] = decryptData(Data, schoolenckey)
                     try:
                         deviceCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
@@ -332,16 +331,16 @@ def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devic
             params = {"uid": uid, "did": did}
         )
         revoke_list.raise_for_status()
+        did_list = revoke_list.json()["dids"]
     except requests.exceptions.HTTPError as e:
         print ("Current device not found", e.response.json()["detail"])
         sys.exit(1)
-    did_list = revoke_list.json()["dids"]
     
     print(f"DIDs of registered, not yet revoked devices: {did_list}")
     did_selection = int(input("Select DID to revoke: "))
-    revoke_did = int(did_list[did_selection])
+    revoke_did = did_selection
     message_str = f"Revoke{revoke_did}"
-    message_bytes = base64.b64decode(message_str.encode())
+    message_bytes = message_str.encode()
     msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
     msgSignature_str = base64.b64encode(msgSignature).decode()
     deviceCert_bytes = devicecert.public_bytes(
@@ -354,7 +353,7 @@ def revoke_device(uid: int, did: int, deviceprivatekey: dsa.DSAPrivateKey, devic
         f"{SERVER}/revoke",
         json={"uid": uid, "did": did, "revoke_did": revoke_did, "message_str": message_str, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
     ).json()
-    print(revocation["result"])
+    print(revocation)
 
 UID, DID, DK, keyProduct, schoolEncKey, devicePrivateKey, deviceCert, deviceSignature, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
 

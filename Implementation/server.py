@@ -12,8 +12,8 @@ userDataDB: Dict[Tuple[int, int], Optional[int]] = {}
 userConstantDB: Dict[Tuple[int, int], Optional[int]] = {}
 userCertDB: Dict[int, dsa.DSAPublicKey] = {}
 nameDB: Dict[Tuple[int, int], str] = {}
-indexDataDB: Dict[int, list[int]] = {}
-studentDataDB: Dict[int, str] = {}
+indexDataDB: Dict[int, list[int]] = {} # index:list of dataID
+studentDataDB: Dict[int, str] = {} # dataID:student info
 r2_store: Dict[Tuple[int, int], int] = {}
 device_locations: Dict[Tuple[int, int], Tuple[str, int]] = {}
 state: Dict[str, object] = {
@@ -314,7 +314,7 @@ def eval_step2(req: EvalStep2Request):
     if final_value not in indexDataDB:
         raise HTTPException(status_code=400, detail="Encrypted Index not found in this server.")
     
-    DataID = indexDataDB[final_value]
+    DataID = indexDataDB[final_value] # returns list of DataIDs
     query_result:dict[int, str] = {}
     
     for ID in DataID:

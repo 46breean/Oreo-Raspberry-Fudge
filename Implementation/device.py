@@ -147,10 +147,12 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
             for index in indexes:
                 intIndex = int(index)
                 hashed_index = hash_int(intIndex) % p
-                r1 = random_coprime(p - 1)
 
+                # blinding
+                r1 = random_coprime(p - 1)
                 blinded = pow(hashed_index, dk * r1, p)
 
+                #server-blinding
                 try:
                     resp1 = requests.post(
                         f"{SERVER}/eval/step1", 
@@ -168,15 +170,17 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                     input("Press Enter to continue...")
                     return
 
+                # unblinding
                 r1_inv = pow(r1, -1, p - 1)
                 unblinded1 = pow(blinded2, r1_inv, p)
 
+                # receive query result
                 try:
                     resp2 = requests.post(
                         f"{SERVER}/eval/step2", 
                         json={"uid": uid, "did": did, "unblinded1": unblinded1}
                     ).json()
-                    tempQueryResult = resp2["query_result"]
+                    tempQueryResult = resp2["query_result"]  # dict[dataID:studentinfo] (encrypted)
                 except requests.exceptions.HTTPError as e:
                     print("Step 2 failed:", e.response.json()["detail"])
                     input("Press Enter to continue...")
@@ -208,13 +212,15 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 s.sendall(json.dumps(data).encode())
                 SData = json.loads(s.recv(4096).decode())
                 if SData == b"REJECTED":
-                    print("[Administrator] Decryption Request Rejected.")
+                    print("[Administrator] Decryption Request Rejected, device has been revoked.")
+                    sys.exit(1)
                 else:
                     print("[Administrator] Decryption Request Accepted.")
-                    for DataID, Data in SData.items():
-                        SData[int(DataID)] = Data
+                    StudentData:dict[int,str] = {}
+                    for DataID, Data in list(SData.items()):
+                        StudentData[int(DataID)] = Data
         
-            print(f"Student Data requested: \n{SData}")
+            print(f"Student Data requested: \n{StudentData}")
 
         elif choice == 3:
             dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
