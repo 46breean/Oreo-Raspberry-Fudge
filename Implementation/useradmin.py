@@ -110,7 +110,6 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
             f"{SERVER}/announce", 
             json={"uid": uid, "did": did, "ip": HOST, "port": PORT}
         ).json()
-        print(f"Listener started on {HOST}:{PORT}...")
 
         while True:
             conn, addr = s.accept()
@@ -149,7 +148,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
 
                     regData = {"DID": data[0], "DK": data[1], "deviceSignature_str": deviceSignature_str}
                     conn.sendall(json.dumps(regData).encode())
-                    print(f"Device registration for DID {data[0]} completed.")
+                    print(f"\nDevice registration for DID {data[0]} completed.")
                 
                 elif deviceMsg == "Encrypt Data":
 
@@ -186,7 +185,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     except InvalidSignature:
                         ciphertextdata = b"REJECTED"
 
-                    print(f"[Device {did}] Encryption successful.")
+                    print(f"\n[Device {did}] Encryption successful.")
 
                     conn.sendall(json.dumps(ciphertextdata).encode())
                 
@@ -224,7 +223,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     except InvalidSignature:
                         plaintextData = b"REJECTED"
 
-                    print(f"[Device {did}] Decryption successful")
+                    print(f"\n[Device {did}] Decryption successful")
                     
                     conn.sendall(json.dumps(plaintextData).encode())
                 
@@ -275,7 +274,7 @@ def initialisation():
         referral_port = referral_info["port"]
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            print(f"Connecting to server administrator at {referral_ip}:{referral_port} to obtain school encryption key...")
+            print(f"\nConnecting to server administrator at {referral_ip}:{referral_port} to obtain school encryption key...")
             s.connect((referral_ip, referral_port))
             data = json.dumps({"Username": name, "OTP": otp, "deviceMsg": "Obtain school encryption key", "UID": uid, "DID":did}).encode()
             s.sendall(data)
@@ -288,10 +287,10 @@ def initialisation():
 
             response = json.loads(raw.decode())
             if response == "REJECTED":
-                print("Incorrect OTP. Initialisation failed.")
+                print("\nIncorrect OTP. Initialisation failed.")
                 sys.exit(1)
             else:
-                print("Correct OTP. Beginning initialisation...")
+                print("\nCorrect OTP. Beginning initialisation...")
                 schoolenckey_int = int(response)
                 schoolenckey = schoolenckey_int.to_bytes(32, "big") 
 
@@ -301,7 +300,7 @@ def initialisation():
             json={"name": name, "unused": unused, "schoolCert_str": schoolcert_str, "uid": uid, "did":did}
         ).json()        
 
-        print(f"User Administrator of {name} initialised with UID {uid}, DID {did}, school encryption key.")
+        print(f"\nUser Administrator of {name} initialised with UID {uid}, DID {did}, school encryption key.")
 
         return uid, did, dk, keyproduct, schoolenckey, deviceprivatekey, devicecert, devicesignature, schoolprivatekey, schoolcert
 
@@ -373,5 +372,5 @@ listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyPro
 listener_thread.start()
 
 while True:
-    input("Press enter to revoke devices. Else, listening...")
+    input("\nPress enter to revoke devices.")
     revoke_device(UID, DID, devicePrivateKey, deviceCert, deviceSignature)

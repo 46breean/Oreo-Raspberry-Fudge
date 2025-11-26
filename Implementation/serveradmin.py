@@ -68,7 +68,7 @@ def handle_user_connection(conn: socket.socket, masterEncKey: bytes):
             if "Username" in data:
                 username = str(data["Username"])
                 userotp = int(data["OTP"])
-                print(f"Initialisation request from {username}")
+                print(f"\n\nReceived initialisation request from {username}.")
 
                 if username not in active_otps:
                     conn.sendall(json.dumps("REJECTED").encode())
@@ -94,8 +94,13 @@ def handle_user_connection(conn: socket.socket, masterEncKey: bytes):
 
                     conn.sendall(json.dumps(schoolEncKey).encode())
 
-                    print(f"[{uid} {username}] initialised successfully.")
+                    print(f"[{uid} {username}] Initialised successfully.")
                     unrevoked_uids[username] = uid
+
+                    print("\nServer Administrator Menu:")
+                    print("1. Initialise new user.")
+                    print("2. Revoke user.")
+                    print("Select function: ")
 
         except Exception as e:
             print(f"Error handling connnection: {e}")
@@ -109,8 +114,6 @@ def user_listener(uid: int, did: int, masterEncKey: bytes):
 
         # Announce listener to server
         requests.post(f"{SERVER}/announce", json={"uid": uid, "did": did, "ip": host, "port": port})
-
-        print(f"\nUser listener running on {host}:{port}")
 
         while True:
             conn, _ = s.accept()
@@ -152,12 +155,12 @@ while True:
     print("\nServer Administrator Menu:")
     print("1. Initialise new user.")
     print("2. Revoke user.")
-    choice = input("Select function...")
+    choice = input("Select function: ")
 
     try:
         choice = int(choice)
         if choice == 1:
-            username = str(input("Enter new username: "))
+            username = str(input("\nEnter new username: "))
             if username in active_otps.keys():
                 print("Username taken. Please choose another username.")
                 continue
@@ -165,7 +168,7 @@ while True:
             otp = random.randint(10**7, 10**8 - 1)
             active_otps[username] = otp
 
-            print(f"Initialising new user. \n Username: {username} \n OTP: {otp}")
+            print(f"\nInitialising new user. \n Username: {username} \n OTP: {otp}")
 
         elif choice == 2:
             revoke_user()

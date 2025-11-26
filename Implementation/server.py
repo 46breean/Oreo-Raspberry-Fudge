@@ -272,14 +272,14 @@ def revoke(req: RevokeRequest):
         print("Signature is invalid. Revocation unauthorised.")
         return
     userDataDB[target] = None
-    return {"result": "Revocation Completed."}
+    return {"result": "Revocation completed."}
 
 @app.post("/super_revoke", response_model=SuperRevokeResponse)
 def super_revoke(req: SuperRevokeRequest):
     for (k,_) in userDataDB.items():
         if k[0] == req.uid:
             userDataDB[k] = None
-    return {"result": "Revocation Completed."}
+    return {"result": "Revocation completed."}
     
 @app.post("/eval/step1", response_model=EvalStep1Response)
 def eval_step1(req: EvalStep1Request):
