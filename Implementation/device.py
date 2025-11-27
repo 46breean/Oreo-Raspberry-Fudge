@@ -174,7 +174,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     print(f"\nConnecting to administrator device at {adminip}:{adminport} for student data decryption...")
                     s.connect((adminip, adminport))
-                    data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
+                    data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
                     s.sendall(json.dumps(data).encode())
                     plaintextSData = json.loads(s.recv(4096).decode())
                     if plaintextSData == b"REJECTED":
@@ -210,7 +210,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     print(f"\nConnecting to administrator device at {adminip}:{adminport} for student data encryption...")
                     s.connect((adminip, adminport))
-                    data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
+                    data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
                     s.sendall(json.dumps(data).encode())
                     SData = json.loads(s.recv(4096).decode())
                     if SData == b"REJECTED":

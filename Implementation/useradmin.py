@@ -155,7 +155,6 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     # verifying device
                     deviceCert_str: str = data["deviceCert_str"]
                     msgSignature_str: str = data["msgSignature_str"]
-                    message_str: str = data["message_str"]
                     devicesignature_str: str = data["deviceSignature_str"]
 
                     deviceCert_bytes = base64.b64decode(deviceCert_str.encode())
@@ -170,7 +169,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         return
                     
                     msgSignature_bytes = base64.b64decode(msgSignature_str.encode())
-                    message_bytes = message_str.encode()
+                    message_bytes = deviceMsg.encode()
 
                     try:
                         deviceCert_DSAPublicKey.verify(msgSignature_bytes, message_bytes, hashes.SHA256())
@@ -192,7 +191,6 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     # verifying device
                     deviceCert_str: str = data["deviceCert_str"]
                     msgSignature_str: str = data["msgSignature_str"]
-                    message_str: str = data["message_str"]
                     devicesignature_str: str = data["deviceSignature_str"]
 
                     deviceCert_bytes = base64.b64decode(deviceCert_str.encode())
@@ -207,7 +205,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         return
                     
                     signature_bytes = base64.b64decode(msgSignature_str.encode())
-                    message_bytes = message_str.encode()
+                    message_bytes = deviceMsg.encode()
 
                     try:
                         deviceCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
