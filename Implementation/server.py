@@ -172,7 +172,7 @@ def get_config():
 
 @app.post("/init")
 def init_device(req: InitRequest):
-    constant = random.randint(1, 100000)
+    constant = random.randint(1000, 1000000)
     UID = req.uid
     DID = req.did
     DSK = req.unused*constant
