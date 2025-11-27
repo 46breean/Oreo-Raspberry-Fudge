@@ -1,22 +1,22 @@
 import random, math, uvicorn, pickle, os, base64
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-from typing import Dict, Tuple, Optional, cast
+from typing import Optional, cast
 from contextlib import asynccontextmanager
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives import hashes, serialization
 
 P = 29996224275833 # prime modulus
-userDataDB: Dict[Tuple[int, int], Optional[int]] = {}
-userConstantDB: Dict[Tuple[int, int], Optional[int]] = {}
-userCertDB: Dict[int, dsa.DSAPublicKey] = {}
-nameDB: Dict[Tuple[int, int], str] = {}
-indexDataDB: Dict[int, list[int]] = {} # index:list of dataID
-studentDataDB: Dict[int, str] = {} # dataID:student info
-r2_store: Dict[Tuple[int, int], int] = {}
-device_locations: Dict[Tuple[int, int], Tuple[str, int]] = {}
-state: Dict[str, object] = {
+userDataDB: dict[tuple[int, int], Optional[int]] = {}
+userConstantDB: dict[tuple[int, int], Optional[int]] = {}
+userCertDB: dict[int, dsa.DSAPublicKey] = {}
+nameDB: dict[tuple[int, int], str] = {}
+indexDataDB: dict[int, list[int]] = {} # index:list of dataID
+studentDataDB: dict[int, str] = {} # dataID:student info
+r2_store: dict[tuple[int, int], int] = {}
+device_locations: dict[tuple[int, int], tuple[str, int]] = {}
+state: dict[str, object] = {
     "userDataDB": userDataDB,
     "userConstantDB": userConstantDB,
     "nameDB": nameDB,
