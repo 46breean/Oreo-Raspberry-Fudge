@@ -101,7 +101,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
 
         try:
             if choice == 1:
-                queryResult: dict[str, str] = {}
+                finalQueryResult: dict[str, str] = {}
                 data: dict[str, str|int|dict[str, str]]
                 
                 print("\nSelect your query type:")
@@ -146,19 +146,19 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                             f"{SERVER}/eval/step2", 
                             json={"uid": uid, "did": did, "unblinded1": unblinded1}
                         ).json()
-                        tempQueryResult = resp2["query_result"]  # dict[dataID:studentinfo] (encrypted)
+                        queryResult = resp2["query_result"]  # dict[dataID:studentinfo] (encrypted)
                     except requests.exceptions.HTTPError as e:
                         print("Step 2 failed:", e.response.json()["detail"])
                         input("Press Enter to continue...")
                         return
                     
                     if queryType == 1 or queryType == 3:
-                            queryResult = queryResult|tempQueryResult
+                            finalQueryResult = finalQueryResult|queryResult
                     elif queryType == 2:
                         if not queryResult:
-                            queryResult = tempQueryResult
+                            finalQueryResult = queryResult
                         else:
-                            queryResult = {k:tempQueryResult[k] for k in queryResult if k in tempQueryResult}
+                            queryResult = {k:queryResult[k] for k in finalQueryResult if k in queryResult}
 
                 message_str = "Decrypt Data"
                 message_bytes = message_str.encode()
@@ -174,7 +174,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     print(f"\nConnecting to administrator device at {adminip}:{adminport} for student data decryption...")
                     s.connect((adminip, adminport))
-                    data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
+                    data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": finalQueryResult, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
                     s.sendall(json.dumps(data).encode())
                     plaintextSData = json.loads(s.recv(4096).decode())
                     if plaintextSData == b"REJECTED":
