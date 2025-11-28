@@ -1,106 +1,158 @@
+import socket, json, requests, os, pickle, random, threading
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
-import hashlib, socket, json, requests, threading, os, pickle
+import hashlib
 
 SERVER = "http://172.22.13.14:8000"
-
 state: dict[str, bytes|int] = {}
+active_otps: dict[str, int|None] = {}
+unrevoked_uids: dict[str, int|None] = {}
 
-def save_state(state: dict[str, bytes|int], filename:str ='serveradmin_state.pk1'):
+def save_state(state: dict[str, bytes|int], filename:str='serveradmin_state.pk1'):
     with open(filename, "wb") as f:
         pickle.dump(state, f)
 
-def load_state(filename:str = 'serveradmin_state.pk1'):
+def load_state(filename:str='serveradmin_state.pk1'):
     if not os.path.exists(filename):
         return None
     with open(filename, "rb") as f:
         return pickle.load(f)
 
-def masterKeyDev() -> bytes:
-    masterKey = AESGCMSIV.generate_key(bit_length=256)
-    return masterKey
+def masterEncKeyDev() -> bytes:
+    return AESGCMSIV.generate_key(bit_length=256)
 
-def schoolKeyDev(masterKey:bytes, uid:int, did:int) -> bytes:
+def schoolEncKeyDev(masterEncKey: bytes, uid: int, did: int) -> bytes:
     salt = hashlib.sha256(f"{uid}{did}".encode()).digest()
-    schoolKey = HKDF(algorithm = hashes.SHA256(), length = 32, salt = salt, info = b"").derive(masterKey)
-    return schoolKey
+    return HKDF(algorithm=hashes.SHA256(), length=32, salt=salt, info=b"").derive(masterEncKey)
 
 def get_local_ip() -> str:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
+        return s.getsockname()[0]
     finally:
         s.close()
-    return ip
 
 def revoke_user():
-    uid:str = input("Enter UID that is to be revoked: ")
-    revoke = requests.post(
-        f"{SERVER}/super_revoke", 
-        json={"uid": uid}
-    ).json()
-    print(revoke["result"])
+    names = [name for (name), uid in unrevoked_uids.items() if uid is not None]
+    print("\nList of unrevoked users:")
+    print(names)
+    username = input("Enter user to be revoked: ")
+    revoke_uid = unrevoked_uids[username]
+    revoke = requests.post(f"{SERVER}/super_revoke", json={"uid": revoke_uid}).json()
+    print(revoke.get("result", "No response"))
+    unrevoked_uids[username] = None
 
-def inbound_socket(uid: int, did: int, masterKey: bytes):
+def handle_user_connection(conn: socket.socket, masterEncKey: bytes):
+    with conn:
+        try:
+            data = json.loads(conn.recv(4096).decode())
+        except json.JSONDecodeError:
+            print("Received invalid JSON from client, rejecting...")
+            conn.sendall(json.dumps("REJECTED").encode())
+            return
+
+        try:
+            if "Username" in data:
+                username = str(data["Username"])
+                userotp = int(data["OTP"])
+                print(f"\n\nReceived initialisation request from {username}.")
+
+                if username not in active_otps:
+                    conn.sendall(json.dumps("REJECTED").encode())
+                    print(f"Username invalid. Request rejected.")
+                    return
+                elif active_otps[username] == None:
+                    conn.sendall(json.dumps("REJECTED").encode())
+                    print("User has already been initialised.")
+                    return
+                elif userotp != active_otps[username]:
+                    conn.sendall(json.dumps("REJECTED").encode())
+                    print(f"Incorrect OTP from {username}. Request rejected.")
+                    return
+                elif userotp == active_otps[username]:
+                    print(f"Correct OTP. Initialising {username}...")
+
+                    active_otps[username] = None
+                    uid, did = data["UID"], data["DID"]
+                    schoolEncKey_bytes = schoolEncKeyDev(masterEncKey, uid, did)
+                    schoolEncKey = int.from_bytes(schoolEncKey_bytes, "big")
+                    conn.sendall(json.dumps(schoolEncKey).encode())
+
+                    print(f"[{uid} {username}] Initialised successfully.")
+                    unrevoked_uids[username] = uid
+
+                    print("\nServer Administrator Menu:")
+                    print("1. Initialise new user.")
+                    print("2. Revoke user.")
+                    print("Select function: ")
+
+        except Exception as e:
+            print(f"Error handling connnection: {e}")
+
+def user_listener(uid: int, did: int, masterEncKey: bytes):
     host = get_local_ip()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((host, 0))
         s.listen()
         port = s.getsockname()[-1]
-        resp = requests.post(
-            f"{SERVER}/announce", 
-            json={"uid": uid, "did": did, "ip": host, "port": port}
-        ).json()
-        print(resp["result"])
-        print(f"Listener started on {host}:{port}...")
-        while True:
-            conn = s.accept()[0] #addr unused
-            with conn:
-                data = json.loads(conn.recv(4096).decode())
-                deviceMsg, uid, did = data["deviceMsg"], data["UID"], data["DID"]
-                if deviceMsg == "Obtain school encryption key":
-                    schoolKey_bytes = schoolKeyDev(masterKey, uid, did)
-                    schoolKey = int.from_bytes(schoolKey_bytes, "big")
-                    data_to_send = json.dumps(schoolKey)
-                    conn.sendall(data_to_send.encode())
-                    print(f"[User {uid}] User initialisation completed.")
-                else:
-                    print("This functionality has not yet been programmed for.")
 
-def init_reg() -> tuple[int, int]:
-    init = requests.post(
-        f"{SERVER}/super_init", 
-        json={"name": "serverAdmin"}
-    ).json()
+        # Announce listener to server
+        requests.post(f"{SERVER}/announce", json={"uid": uid, "did": did, "ip": host, "port": port})
+        while True:
+            conn, _ = s.accept()
+            threading.Thread(target=handle_user_connection, args=(conn, masterEncKey), daemon=True).start()
+
+def init_reg() -> tuple[int, int, bytes]:
+    init = requests.post(f"{SERVER}/super_init", json={"name": "serverAdmin"}).json()
     uid, did = init["UID"], init["DID"]
+    masterenckey = masterEncKeyDev()
     print(f"Server Administrator initialised with UID {uid}, DID {did}")
-    return uid, did
+    return uid, did, masterenckey
 
 def runServerAdmin():
-    start_state = load_state()
-    if start_state:
-        masterKey = start_state["masterKey"]
-        uid = start_state["UID"]
-        did = start_state["DID"]
-        print("Saved state loaded.")
-    else:
-        print("Fresh state loaded.")
-        masterKey = masterKeyDev()
-        uid, did = init_reg()
-        state["masterKey"] = masterKey
-        state["UID"] = uid
-        state["DID"] = did
-        save_state(state)
-    return uid, did, masterKey
+    # start_state = load_state()
+    # if start_state:
+    #     masterenckey = start_state["masterEncKey"]
+    #     uid = start_state["UID"]
+    #     did = start_state["DID"]
+    #     print("Saved state loaded.")
+    # else:
+        uid, did, masterenckey = init_reg()
+        # state["masterEncKey"] = masterenckey
+        # state["UID"] = uid
+        # state["DID"] = did
+        # save_state(state)
+        return uid, did, masterenckey
 
-UID, DID, masterKey = runServerAdmin()
+# ----------------- MAIN -----------------
+UID, DID, masterEncKey = runServerAdmin()
 
-#start listener
-listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, masterKey), daemon=False)
+# Start listener thread once
+listener_thread = threading.Thread(target=user_listener, args=(UID, DID, masterEncKey), daemon=True)
 listener_thread.start()
 
 while True:
-    input("Press enter to revoke devices. Else, listening...")
-    revoke_user()
+    print("\nServer Administrator Menu:")
+    print("1. Initialise new user.")
+    print("2. Revoke user.")
+    choice = input("Select function: ")
+
+    try:
+        choice = int(choice)
+        if choice == 1:
+            username = str(input("\nEnter new username: "))
+            if username in active_otps.keys():
+                print("Username taken. Please choose another username.")
+                continue
+            otp = random.randint(10**7, 10**8 - 1)
+            active_otps[username] = otp
+            print(f"\nInitialising new user. \n Username: {username} \n OTP: {otp}")
+        elif choice == 2:
+            revoke_user()
+        else:
+            print("Please select a valid function.")
+
+    except ValueError:
+        print("Invalid input")

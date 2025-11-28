@@ -1,22 +1,22 @@
 import random, math, uvicorn, pickle, os, base64
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-from typing import Dict, Tuple, Optional, cast
+from typing import Optional, cast
 from contextlib import asynccontextmanager
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives import hashes, serialization
 
 P = 29996224275833 # prime modulus
-userDataDB: Dict[Tuple[int, int], Optional[int]] = {}
-userConstantDB: Dict[Tuple[int, int], Optional[int]] = {}
-userCertDB: Dict[int, dsa.DSAPublicKey] = {}
-nameDB: Dict[Tuple[int, int], str] = {}
-indexDataDB: Dict[int, list[int]] = {} # index:list of dataID
-studentDataDB: Dict[int, str] = {} # dataID:student info
-r2_store: Dict[Tuple[int, int], int] = {}
-device_locations: Dict[Tuple[int, int], Tuple[str, int]] = {}
-state: Dict[str, object] = {
+userDataDB: dict[tuple[int, int], Optional[int]] = {}
+userConstantDB: dict[tuple[int, int], Optional[int]] = {}
+userCertDB: dict[int, dsa.DSAPublicKey] = {}
+nameDB: dict[tuple[int, int], str] = {}
+indexDataDB: dict[int, list[int]] = {} # index:list of dataID
+studentDataDB: dict[int, str] = {} # dataID:student info
+r2_store: dict[tuple[int, int], int] = {}
+device_locations: dict[tuple[int, int], tuple[str, int]] = {}
+state: dict[str, object] = {
     "userDataDB": userDataDB,
     "userConstantDB": userConstantDB,
     "nameDB": nameDB,
@@ -61,21 +61,16 @@ class AnnounceRequest(BaseModel):
     ip: str
     port: int
 
-class AnnounceResponse(BaseModel):
-    result: str
-
 class DeviceLocationResponse(BaseModel):
     ip: str
     port: int
 
 class InitRequest(BaseModel):
+    uid: int
+    did: int
     unused: int
     name: str = Query(...)
     schoolCert_str: str
-
-class InitResponse(BaseModel):
-    UID: int
-    DID: int
 
 class SuperInitRequest(BaseModel):
     name: str = Query(...)
@@ -105,8 +100,6 @@ class RevokeRequest(BaseModel):
     revoke_did: int
     message_str: str
     msgSignature_str: str
-    deviceCert_str: str
-    deviceSignature_str: str
 
 class RevokeResponse(BaseModel):
     result: str
@@ -159,10 +152,10 @@ class EditStep3Response(BaseModel):
     result: str
 
 # endpoints
-@app.post("/announce", response_model=AnnounceResponse)
+@app.post("/announce")
 def announce(req: AnnounceRequest):
     device_locations[(req.uid, req.did)] = (req.ip, req.port)
-    return {"result": "This device's IP and Port have been recorded on the server."}
+    return
 
 @app.get("/device_location", response_model = DeviceLocationResponse)
 def device_location(uid: int = Query(...), did: int = Query(...)) -> dict[str, int|str]:
@@ -177,20 +170,20 @@ def device_location(uid: int = Query(...), did: int = Query(...)) -> dict[str, i
 def get_config():
     return {"p": P}
 
-@app.post("/init", response_model=InitResponse)
+@app.post("/init")
 def init_device(req: InitRequest):
-    constant = random.randint(1, 100000)
-    UID = random.randint(10**9, 10**10 - 1)
-    DID = random.randint(10**9, 10**10 - 1)
+    constant = random.randint(1000, 1000000)
+    UID = req.uid
+    DID = req.did
     DSK = req.unused*constant
-    userConstantDB[(UID, DID)] = constant
-    userDataDB[(UID, DID)] = DSK
-    nameDB[(UID, DID)] = req.name
     schoolCert_bytes = base64.b64decode(req.schoolCert_str.encode())
     schoolCert_publicKeyTypes = serialization.load_pem_public_key(schoolCert_bytes)
     schoolCert = cast(dsa.DSAPublicKey, schoolCert_publicKeyTypes)
+    userConstantDB[(UID, DID)] = constant
+    userDataDB[(UID, DID)] = DSK
+    nameDB[(UID, DID)] = req.name
     userCertDB[UID] = schoolCert
-    return {"UID": UID, "DID": DID}
+    return
 
 @app.post("/super_init", response_model=SuperInitResponse)
 def super_init(req: SuperInitRequest):
@@ -219,7 +212,6 @@ def register_device(req: RegisterRequest):
     if new_dsk in existing_dsks:
         raise HTTPException(status_code=409, detail="DK generated is invalid")
 
-
     existing_dids = [d for (u, d), _ in userDataDB.items() if u == req.uid]
     while True:
         new_did = random.randint(10**9, 10**10 - 1)
@@ -228,7 +220,6 @@ def register_device(req: RegisterRequest):
 
     userDataDB[(req.uid, new_did)] = new_dsk
     userConstantDB[req.uid, new_did] = DSK_constant
-
     return {"new_did": new_did}
 
 @app.get("/revoke_list", response_model=RevokeListResponse)
@@ -256,35 +247,23 @@ def revoke(req: RevokeRequest):
     elif userDataDB[target] is None:
         raise HTTPException(status_code=409, detail="Target device already revoked")
     
-    print(userCertDB)
     schoolCert = userCertDB[req.uid]
-    deviceCert_bytes = base64.b64decode(req.deviceCert_str.encode())
-    deviceCert_publicKeyTypes = serialization.load_pem_public_key(deviceCert_bytes)
-    deviceCert_DSAPublicKey = cast(dsa.DSAPublicKey, deviceCert_publicKeyTypes)
-    deviceSignature_bytes = base64.b64decode(req.deviceSignature_str.encode())
-    try:
-        schoolCert.verify(deviceSignature_bytes, deviceCert_bytes, hashes.SHA256())
-    except InvalidSignature:
-        print("Device certificate is invalid. Revocation unauthorised.")
-        return
-    
     message_bytes = req.message_str.encode()
-    signature_bytes = base64.b64decode(req.msgSignature_str.encode())
-
+    msgSignature_bytes = base64.b64decode(req.msgSignature_str.encode())
     try:
-        deviceCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
+        schoolCert.verify(msgSignature_bytes, message_bytes, hashes.SHA256())
     except InvalidSignature:
         print("Signature is invalid. Revocation unauthorised.")
         return
     userDataDB[target] = None
-    return {"result": "Revocation Completed."}
+    return {"result": "Revocation completed."}
 
 @app.post("/super_revoke", response_model=SuperRevokeResponse)
 def super_revoke(req: SuperRevokeRequest):
     for (k,_) in userDataDB.items():
         if k[0] == req.uid:
             userDataDB[k] = None
-    return {"result": "Revocation Completed."}
+    return {"result": "Revocation completed."}
     
 @app.post("/eval/step1", response_model=EvalStep1Response)
 def eval_step1(req: EvalStep1Request):
@@ -323,7 +302,6 @@ def eval_step2(req: EvalStep2Request):
             raise HTTPException(status_code=400,detail="No student found.")
         SData = studentDataDB[intID]
         query_result[intID] = SData
-
     return {"query_result": query_result}
     
 @app.post("/edit/step1", response_model=EditStep1Response)
@@ -354,9 +332,7 @@ def edit_step2(req: EditStep2Request):
 
     r2 = random_coprime(P - 1)
     r2_store[key] = r2
-
     blinded2 = pow(req.blinded, DSK * r2, P)
-    
     return {"blinded2": blinded2}
 
 @app.post("/edit/step3", response_model=EditStep3Response)
@@ -383,7 +359,6 @@ def edit_step3(req: EditStep3Request):
                 indexDataDB[final_value] = intDataID
             else:
                 raise HTTPException(status_code=400, detail="You cannot remove data IDs from a non-existent index.")
-
     return{"result": "successful"}
 
 if __name__ == "__main__":
