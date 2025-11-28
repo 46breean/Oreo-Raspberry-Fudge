@@ -192,7 +192,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 print("\nEditing student data...")
                 print("Format: {DataID1:'Student Data 1', DataID2:'Student Data 2'}")
                 if dataEntryType == 1:
-                    print("(New Data) Input any integer for DataID.")
+                    print("(New Data) Input any integer for Data ID.")
                 SData = ast.literal_eval(input("Enter student data: "))
 
                 message_str = "Encrypt Data"
@@ -239,7 +239,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 
                 if dataEntryType == 1: # if new student data is added
                     print("\nStudent database successfully edited.")
-                    print(f"DataIDs of new students: {newDataIDList}")
+                    print(f"Data IDs of new students: {newDataIDList}")
                 else:
                     print("\nStudent database successfully edited.")
                 

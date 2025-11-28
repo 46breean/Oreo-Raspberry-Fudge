@@ -293,7 +293,7 @@ def eval_step2(req: EvalStep2Request):
     if final_value not in indexDataDB:
         raise HTTPException(status_code=400, detail="Encrypted Index not found in this server.")
     
-    DataID = indexDataDB[final_value] # returns list of DataIDs
+    DataID = indexDataDB[final_value] # returns list of Data IDs
     query_result:dict[int, str] = {}
     
     for ID in DataID:
@@ -312,11 +312,11 @@ def edit_step1(req: EditStep1Request):
         if req.dataEntryType == 1:
             DataID = random.randint(10**7, 10**8 - 1)
             while DataID in studentDataDB:
-                DataID = random.randint(10*7, 10*8 - 1)
+                DataID = random.randint(10**7, 10**8 - 1)
             newDataIDList.append(DataID)
         elif req.dataEntryType == 2:
             if DataID not in studentDataDB:
-                raise HTTPException(status_code=400,detail="One or more DataID is not found in the student database. Upload new data and edit existing data separately.")
+                raise HTTPException(status_code=400,detail="One or more Data IDs is not found in the student database. Upload new data and edit existing data separately.")
         studentDataDB[DataID] = Data
     return {"newDataIDList": newDataIDList}
 
@@ -352,7 +352,7 @@ def edit_step3(req: EditStep3Request):
                 indexDataDB[final_value].append(id)
             else:
                 if id not in indexDataDB:
-                    raise HTTPException(status_code=400, detail="DataID not found in index database.")
+                    raise HTTPException(status_code=400, detail="Data ID not found in index database.")
                 indexDataDB[final_value].remove(id)
         else:
             if req.addOrRemove == 1:
