@@ -94,7 +94,7 @@ def registration():
 def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, deviceprivatekey: dsa.DSAPrivateKey, devicecert: dsa.DSAPublicKey, devicesignature: bytes):
     while True:
         print("\nDevice Menu:")
-        print("1. Evaluate and Query")
+        print("1. Student Data Query")
         print("2. Edit Database")
         print("3. Exit")
         choice = int(input("Select function: "))
