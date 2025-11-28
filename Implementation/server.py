@@ -310,10 +310,11 @@ def edit_step1(req: EditStep1Request):
     for DataID,Data in req.SData.items():
         DataID = int(DataID)
         if req.dataEntryType == 1:
-            DataID = random.randint(10**7, 10**8 - 1)
-            while DataID in studentDataDB:
+            while True:
                 DataID = random.randint(10**7, 10**8 - 1)
-            newDataIDList.append(DataID)
+                if DataID not in studentDataDB:
+                    newDataIDList.append(DataID)
+                    return False
         elif req.dataEntryType == 2:
             if DataID not in studentDataDB:
                 raise HTTPException(status_code=400,detail="One or more Data IDs is not found in the student database. Upload new data and edit existing data separately.")
