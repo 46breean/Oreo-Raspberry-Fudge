@@ -1,14 +1,14 @@
 p = int(input("prime: "))
 
-orders = []
-for i in range(1, p):
+def order(a, p):
     n = 1
     while True:
-        if pow(i, n, p) == 1:
-            orders.append(n)
-            break
+        if pow(a, n, p) == 1:
+            return n
         n += 1
 
-print(orders)
-
-print(orders[::-1])
+for x in range(1, p):
+    ox  = order(x, p)
+    opx = order(p - x, p)
+    if ox != opx:
+        print(x, ox, opx)
