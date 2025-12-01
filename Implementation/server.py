@@ -6,17 +6,12 @@ import os
 import base64
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-<<<<<<< HEAD
 from typing import TypedDict, Dict, List, Tuple, Optional, cast, Union
-=======
-from typing import Optional, cast
->>>>>>> e4979c3b04d424032a4b22144ad9f76e9ee738c1
 from contextlib import asynccontextmanager
 from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.exceptions import InvalidSignature
 
-<<<<<<< HEAD
 P = 29996224275833  # prime modulus
 
 # database types
@@ -37,26 +32,6 @@ device_locations: Dict[Tuple[int, int], Tuple[str, int]] = {}
 r2_store: Dict[Tuple[int, int], int] = {}
 
 STATE_FILE = "server_state.pk1"
-=======
-P = 29996224275833 # prime modulus
-userDataDB: dict[tuple[int, int], Optional[int]] = {}
-userConstantDB: dict[tuple[int, int], Optional[int]] = {}
-userCertDB: dict[int, dsa.DSAPublicKey] = {}
-nameDB: dict[tuple[int, int], str] = {}
-indexDataDB: dict[int, list[int]] = {} # index:list of dataID
-studentDataDB: dict[int, str] = {} # dataID:student info
-r2_store: dict[tuple[int, int], int] = {}
-device_locations: dict[tuple[int, int], tuple[str, int]] = {}
-state: dict[str, object] = {
-    "userDataDB": userDataDB,
-    "userConstantDB": userConstantDB,
-    "nameDB": nameDB,
-    "indexDataDB": indexDataDB,
-    "studentDataDB": studentDataDB,
-    "r2_store": r2_store,
-    "device_locations": device_locations,
-}
->>>>>>> e4979c3b04d424032a4b22144ad9f76e9ee738c1
 
 def random_coprime(p_minus_1: int) -> int:
     while True:
@@ -129,6 +104,8 @@ class RevokeRequest(BaseModel):
     revoke_did: int
     message_str: str
     msgSignature_str: str
+    deviceCert_str: str
+    deviceSignature_str: str
 
 class RevokeResponse(BaseModel):
     result: str
@@ -207,24 +184,6 @@ def device_location(uid: int = Query(...), did: int = Query(...)) -> Dict[str, U
 def get_config():
     return {"p": P}
 
-<<<<<<< HEAD
-=======
-@app.post("/init")
-def init_device(req: InitRequest):
-    constant = random.randint(1000, 1000000)
-    UID = req.uid
-    DID = req.did
-    DSK = req.unused*constant
-    schoolCert_bytes = base64.b64decode(req.schoolCert_str.encode())
-    schoolCert_publicKeyTypes = serialization.load_pem_public_key(schoolCert_bytes)
-    schoolCert = cast(dsa.DSAPublicKey, schoolCert_publicKeyTypes)
-    userConstantDB[(UID, DID)] = constant
-    userDataDB[(UID, DID)] = DSK
-    nameDB[(UID, DID)] = req.name
-    userCertDB[UID] = schoolCert
-    return
-
->>>>>>> e4979c3b04d424032a4b22144ad9f76e9ee738c1
 @app.post("/super_init", response_model=SuperInitResponse)
 def super_init(req: SuperInitRequest):
     UID, DID = 1, 1
@@ -284,23 +243,12 @@ def register_device(req: RegisterRequest):
     if any(v["DSK"] == new_DSK for v in devices.values()):
         raise HTTPException(status_code=409, detail="DSK generated is invalid")
 
-<<<<<<< HEAD
     # generate unique DID
     new_did = random.randint(10**9, 10**10 - 1)
     while new_did in devices:
         new_did = random.randint(10**9, 10**10 - 1)
 
     devices[new_did] = {"DSK": new_DSK, "constant": constant}
-=======
-    existing_dids = [d for (u, d), _ in userDataDB.items() if u == req.uid]
-    while True:
-        new_did = random.randint(10**9, 10**10 - 1)
-        if new_did not in existing_dids:
-            break
-
-    userDataDB[(req.uid, new_did)] = new_dsk
-    userConstantDB[req.uid, new_did] = DSK_constant
->>>>>>> e4979c3b04d424032a4b22144ad9f76e9ee738c1
     return {"new_did": new_did}
 
 @app.get("/revoke_list", response_model=RevokeListResponse)
@@ -323,7 +271,6 @@ def revoke(req: RevokeRequest):
         raise HTTPException(status_code=404, detail="Target device not found")
     if userDB[req.uid]["devices"][req.revoke_did]["DSK"] is None:
         raise HTTPException(status_code=409, detail="Target device already revoked")
-<<<<<<< HEAD
 
     # verify certificates
     schoolCert = userDB[req.uid]["cert"]
@@ -339,14 +286,6 @@ def revoke(req: RevokeRequest):
     try:
         schoolCert.verify(device_sig_bytes, device_bytes, hashes.SHA256())
         deviceCert.verify(sig_bytes, msg_bytes, hashes.SHA256())
-=======
-    
-    schoolCert = userCertDB[req.uid]
-    message_bytes = req.message_str.encode()
-    msgSignature_bytes = base64.b64decode(req.msgSignature_str.encode())
-    try:
-        schoolCert.verify(msgSignature_bytes, message_bytes, hashes.SHA256())
->>>>>>> e4979c3b04d424032a4b22144ad9f76e9ee738c1
     except InvalidSignature:
         raise HTTPException(status_code=403, detail="Invalid signature")
 
@@ -374,7 +313,6 @@ def eval_step2(req: EvalStep2Request):
         raise HTTPException(status_code=400, detail="No pending evaluation")
     r2 = r2_store.pop(key)
     r2_inv = pow(r2, -1, P - 1)
-<<<<<<< HEAD
     final_value = pow(req.unblinded1, r2_inv, P)
 
     user_index = userDB[req.uid]["indexData"]
@@ -423,40 +361,6 @@ def update_existing_students(req: UpdateExistingRequest):
         user_student[data_id] = data_val
 
     return {"result": "success"}
-=======
-    final_value:int = pow(req.unblinded1, r2_inv, P)
-    
-    if final_value not in indexDataDB:
-        raise HTTPException(status_code=400, detail="Encrypted Index not found in this server.")
-    
-    DataID = indexDataDB[final_value] # returns list of Data IDs
-    query_result:dict[int, str] = {}
-    
-    for ID in DataID:
-        intID = int(ID)
-        if intID not in studentDataDB:
-            raise HTTPException(status_code=400,detail="No student found.")
-        SData = studentDataDB[intID]
-        query_result[intID] = SData
-    return {"query_result": query_result}
-    
-@app.post("/edit/step1", response_model=EditStep1Response)
-def edit_step1(req: EditStep1Request):
-    newDataIDList:list[int] = []
-    for DataID,Data in req.SData.items():
-        DataID = int(DataID)
-        if req.dataEntryType == 1:
-            while True:
-                DataID = random.randint(10**7, 10**8 - 1)
-                if DataID not in studentDataDB:
-                    newDataIDList.append(DataID)
-                    return False
-        elif req.dataEntryType == 2:
-            if DataID not in studentDataDB:
-                raise HTTPException(status_code=400,detail="One or more Data IDs is not found in the student database. Upload new data and edit existing data separately.")
-        studentDataDB[DataID] = Data
-    return {"newDataIDList": newDataIDList}
->>>>>>> e4979c3b04d424032a4b22144ad9f76e9ee738c1
 
 @app.post("/edit/step2", response_model=EditStep2Response)
 def edit_step2(req: EditStep2Request):
@@ -467,11 +371,7 @@ def edit_step2(req: EditStep2Request):
         raise HTTPException(status_code=403, detail="Device revoked")
 
     r2 = random_coprime(P - 1)
-<<<<<<< HEAD
     r2_store[(req.uid, req.did)] = r2
-=======
-    r2_store[key] = r2
->>>>>>> e4979c3b04d424032a4b22144ad9f76e9ee738c1
     blinded2 = pow(req.blinded, DSK * r2, P)
     return {"blinded2": blinded2}
 
@@ -484,7 +384,6 @@ def edit_step3(req: EditStep3Request):
     r2_inv = pow(r2, -1, P - 1)
     final_value = pow(req.unblinded1, r2_inv, P)
 
-<<<<<<< HEAD
     user_index = userDB[req.uid]["indexData"]
     int_ids = [int(id_str) for id_str in req.dataIDs]
 
@@ -505,22 +404,6 @@ def edit_step3(req: EditStep3Request):
     return {"result": "successful"}
 
 
-=======
-    for id in intDataID:
-        if final_value in indexDataDB:
-            if req.addOrRemove == 1:
-                indexDataDB[final_value].append(id)
-            else:
-                if id not in indexDataDB:
-                    raise HTTPException(status_code=400, detail="Data ID not found in index database.")
-                indexDataDB[final_value].remove(id)
-        else:
-            if req.addOrRemove == 1:
-                indexDataDB[final_value] = intDataID
-            else:
-                raise HTTPException(status_code=400, detail="You cannot remove data IDs from a non-existent index.")
-    return{"result": "successful"}
->>>>>>> e4979c3b04d424032a4b22144ad9f76e9ee738c1
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

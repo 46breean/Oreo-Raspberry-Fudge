@@ -48,6 +48,7 @@ def registration():
     
     while True:
         print("\nSign Up: Register new device")
+
         uid = int(input("Enter your UID: "))
         admin_did = int(input("Enter your administrator DID: "))
 
@@ -94,14 +95,15 @@ def registration():
 def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, deviceprivatekey: dsa.DSAPrivateKey, devicecert: dsa.DSAPublicKey, devicesignature: bytes):
     while True:
         print("\nDevice Menu:")
-        print("1. Student Data Query")
+        print("1. Evaluate and Query")
         print("2. Edit Database")
         print("3. Exit")
         choice = int(input("Select function: "))
 
         try:
+            
             if choice == 1:
-                finalQueryResult: dict[str, str] = {}
+                queryResult: dict[str, str] = {}
                 data: dict[str, str|int|dict[str, str]]
                 
                 print("\nSelect your query type:")
@@ -109,6 +111,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 print("2. AND query: only results that satisfy all given conditions")
                 print("3. OR query: results that satisfy at least one given condition (i.e. multiple discrete single queries)")
                 queryType = int(input("Select your query type (1/2/3): "))
+
                 indexes = [index.strip() for index in input("Enter student data quer(ies) separated by commas: ").split(",")]
                 for index in indexes:
                     intIndex = int(index)
@@ -146,19 +149,19 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                             f"{SERVER}/eval/step2", 
                             json={"uid": uid, "did": did, "unblinded1": unblinded1}
                         ).json()
-                        queryResult = resp2["query_result"]  # dict[dataID:studentinfo] (encrypted)
+                        tempQueryResult = resp2["query_result"]  # dict[dataID:studentinfo] (encrypted)
                     except requests.exceptions.HTTPError as e:
                         print("Step 2 failed:", e.response.json()["detail"])
                         input("Press Enter to continue...")
                         return
                     
                     if queryType == 1 or queryType == 3:
-                            finalQueryResult = finalQueryResult|queryResult
+                            queryResult = queryResult|tempQueryResult
                     elif queryType == 2:
                         if not queryResult:
-                            finalQueryResult = queryResult
+                            queryResult = tempQueryResult
                         else:
-                            queryResult = {k:queryResult[k] for k in finalQueryResult if k in queryResult}
+                            queryResult = {k:tempQueryResult[k] for k in queryResult if k in tempQueryResult}
 
                 message_str = "Decrypt Data"
                 message_bytes = message_str.encode()
@@ -174,33 +177,24 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     print(f"\nConnecting to administrator device at {adminip}:{adminport} for student data decryption...")
                     s.connect((adminip, adminport))
-                    data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": finalQueryResult, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
+                    data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
                     s.sendall(json.dumps(data).encode())
-                    plaintextSData = json.loads(s.recv(4096).decode())
-                    if plaintextSData == b"REJECTED":
+                    SData = json.loads(s.recv(4096).decode())
+                    if SData == b"REJECTED":
                         print("[Administrator] Decryption Request Rejected, device has been revoked.")
                         sys.exit(1)
                     else:
                         print("[Administrator] Decryption Request Accepted.")
-                        studentData: dict[int,str] = {}
-                        for DataID, Data in list(plaintextSData.items()):
-                            studentData[int(DataID)] = Data
-                print(f"\nStudent Data requested: \n{studentData}")
+                        StudentData:dict[int,str] = {}
+                        for DataID, Data in list(SData.items()):
+                            StudentData[int(DataID)] = Data
+            
+                print(f"\nStudent Data requested: \n{StudentData}")
 
             elif choice == 2:
-<<<<<<< HEAD
-=======
-                dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
-                print("\nEditing student data...")
-                print("Format: {DataID1:'Student Data 1', DataID2:'Student Data 2'}")
-                if dataEntryType == 1:
-                    print("(New Data) Input any integer for Data ID.")
-                SData = ast.literal_eval(input("Enter student data: "))
->>>>>>> e4979c3b04d424032a4b22144ad9f76e9ee738c1
 
                 database = int(input("\nWould you like to edit student database (1) or encrypted index database (2)? "))
 
-<<<<<<< HEAD
                 if database == 1:
                     dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
 
@@ -215,59 +209,6 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                         deviceCert_bytes = devicecert.public_bytes(
                             encoding=serialization.Encoding.PEM,
                             format=serialization.PublicFormat.SubjectPublicKeyInfo,
-=======
-                # connect to admin device
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    print(f"\nConnecting to administrator device at {adminip}:{adminport} for student data encryption...")
-                    s.connect((adminip, adminport))
-                    data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData, "msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
-                    s.sendall(json.dumps(data).encode())
-                    SData = json.loads(s.recv(4096).decode())
-                    if SData == b"REJECTED":
-                        print("[Administrator] Encryption Request Rejected. Press Enter to continue...")
-                        return
-                    else:
-                        print("[Administrator] Encryption Request Accepted.")
-
-                try:
-                    resp1 = requests.post(
-                        f"{SERVER}/edit/step1", 
-                        json={"dataEntryType": dataEntryType, "SData": SData}
-                    )
-                    resp1.raise_for_status()
-                except requests.exceptions.HTTPError as e:
-                    print("Step 1 failed:", e.response.json()["detail"])
-                    input("Press Enter to continue...")
-                    return
-                
-                try:
-                    newDataIDList = resp1.json()["newDataIDList"]
-                except KeyError:
-                    print("\nUnexpected response from server:", resp1.json())
-                    input("Press Enter to continue...")
-                    return
-                
-                if dataEntryType == 1: # if new student data is added
-                    print("\nStudent database successfully edited.")
-                    print(f"Data IDs of new students: {newDataIDList}")
-                else:
-                    print("\nStudent database successfully edited.")
-                
-                print("\n===== Encrypted Index Database Editing =====")
-                indexes = [index.strip() for index in input("Enter list of indexes you would like to edit, separated by commas: ").split(",")]
-                entries = len(indexes)
-                for i in range(entries):
-                    index = int(indexes[i])
-                    print(f"\nCurrently editing: index {index}.")
-                    hashed_index = hash_int(index) % p
-                    r1 = random_coprime(p - 1)
-                    blinded = pow(hashed_index, dk * r1, p)
-
-                    try:
-                        resp2 = requests.post(
-                            f"{SERVER}/edit/step2",
-                            json={"uid": uid, "did": did, "blinded": blinded}
->>>>>>> e4979c3b04d424032a4b22144ad9f76e9ee738c1
                         )
                         deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
                         deviceSignature_str = base64.b64encode(devicesignature).decode()
