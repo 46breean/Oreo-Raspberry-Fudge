@@ -149,6 +149,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     regData = {"DID": data[0], "DK": data[1], "deviceSignature_str": deviceSignature_str}
                     conn.sendall(json.dumps(regData).encode())
                     print(f"\nDevice registration for DID {data[0]} completed.")
+                    print("\nPress enter to revoke devices.")
                 
                 elif deviceMsg == "Encrypt Data":
 
@@ -186,6 +187,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         ciphertextdata = b"REJECTED"
 
                     print(f"\n[Device {did}] Encryption successful.")
+                    print ("\nPress enter to revoke devices.")
 
                     conn.sendall(json.dumps(ciphertextdata).encode())
                 
@@ -238,7 +240,7 @@ def initialisation():
     schoolenckey: bytes
     
     while True:
-        print("\n======Initialise user======")
+        print("\n====== Initialise user ======")
         name = str(input("Input username: "))
         otp = str(input("Input OTP for initialisation: "))
 

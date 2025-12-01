@@ -192,107 +192,115 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 print(f"\nStudent Data requested: \n{StudentData}")
 
             elif choice == 2:
-                dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
-                print("\nEditing student data...")
-                print("Format: {DataID1:'Student Data 1', DataID2:'Student Data 2'}")
-                if dataEntryType == 1:
-                    print("(New Data) Input any integer for DataID.")
-                SData = ast.literal_eval(input("Enter student data: "))
 
-                message_str = "Encrypt Data"
-                message_bytes = message_str.encode()
-                msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
-                msgSignature_str = base64.b64encode(msgSignature).decode()
-                deviceCert_bytes = devicecert.public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                )
-                deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
-                deviceSignature_str = base64.b64encode(devicesignature).decode()
+                database = int(input("\nWould you like to edit student database (1) or encrypted index database (2)? "))
 
-                # connect to admin device
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    print(f"\nConnecting to administrator device at {adminip}:{adminport} for student data encryption...")
-                    s.connect((adminip, adminport))
-                    data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
-                    s.sendall(json.dumps(data).encode())
-                    SData = json.loads(s.recv(4096).decode())
-                    if SData == b"REJECTED":
-                        print("[Administrator] Encryption Request Rejected. Press Enter to continue...")
-                        return
-                    else:
-                        print("[Administrator] Encryption Request Accepted.")
+                if database == 1:
+                    dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
+                    print("\nEditing student data...")
+                    print("Format: {DataID1:'Student Data 1', DataID2:'Student Data 2'}")
+                    if dataEntryType == 1:
+                        print("(New Data) Input any integer for DataID.")
+                    SData = ast.literal_eval(input("Enter student data: "))
 
-                try:
-                    resp1 = requests.post(
-                        f"{SERVER}/edit/step1", 
-                        json={"dataEntryType": dataEntryType, "SData": SData}
+                    message_str = "Encrypt Data"
+                    message_bytes = message_str.encode()
+                    msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
+                    msgSignature_str = base64.b64encode(msgSignature).decode()
+                    deviceCert_bytes = devicecert.public_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PublicFormat.SubjectPublicKeyInfo,
                     )
-                    resp1.raise_for_status()
-                except requests.exceptions.HTTPError as e:
-                    print("Step 1 failed:", e.response.json()["detail"])
-                    input("Press Enter to continue...")
-                    return
-                
-                try:
-                    newDataIDList = resp1.json()["newDataIDList"]
-                except KeyError:
-                    print("\nUnexpected response from server:", resp1.json())
-                    input("Press Enter to continue...")
-                    return
-                
-                if dataEntryType == 1: # if new student data is added
-                    print("\nStudent database successfully edited.")
-                    print(f"DataIDs of new students: {newDataIDList}")
-                else:
-                    print("\nStudent database successfully edited.")
-                
-                print("\n===== Encrypted Index Database Editing =====")
-                indexes = [index.strip() for index in input("Enter list of indexes you would like to edit, separated by commas: ").split(",")]
-                entries = len(indexes)
-                for i in range(entries):
-                    index = int(indexes[i])
-                    print(f"\nCurrently editing: index {index}.")
-                    hashed_index = hash_int(index) % p
-                    r1 = random_coprime(p - 1)
+                    deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
+                    deviceSignature_str = base64.b64encode(devicesignature).decode()
 
-                    blinded = pow(hashed_index, dk * r1, p)
+                    # connect to admin device
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                        print(f"\nConnecting to administrator device at {adminip}:{adminport} for student data encryption...")
+                        s.connect((adminip, adminport))
+                        data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
+                        s.sendall(json.dumps(data).encode())
+                        SData = json.loads(s.recv(4096).decode())
+                        if SData == b"REJECTED":
+                            print("[Administrator] Encryption Request Rejected. Press Enter to continue...")
+                            return
+                        else:
+                            print("[Administrator] Encryption Request Accepted.")
 
                     try:
-                        resp2 = requests.post(
-                            f"{SERVER}/edit/step2",
-                            json={"uid": uid, "did": did, "blinded": blinded}
+                        resp1 = requests.post(
+                            f"{SERVER}/edit/step1", 
+                            json={"dataEntryType": dataEntryType, "SData": SData}
                         )
-                        resp2.raise_for_status()
+                        resp1.raise_for_status()
                     except requests.exceptions.HTTPError as e:
-                        print("Step 2 failed:", e.response.json()["detail"])
+                        print("Step 1 failed:", e.response.json()["detail"])
                         input("Press Enter to continue...")
                         return
                     
                     try:
-                        blinded2 = resp2.json()["blinded2"]
+                        newDataIDList = resp1.json()["newDataIDList"]
                     except KeyError:
-                        print("Unexpected response from server:", resp2.json())
+                        print("\nUnexpected response from server:", resp1.json())
                         input("Press Enter to continue...")
                         return
+                    
+                    if dataEntryType == 1: # if new student data is added
+                        print("\nStudent database successfully edited.")
+                        print(f"DataIDs of new students: {newDataIDList}")
+                    else:
+                        print("\nStudent database successfully edited.")
 
-                    r1_inv = pow(r1, -1, p - 1)
-                    unblinded1 = pow(blinded2, r1_inv, p)
-                    print("You can edit this index in 2 ways: ")
-                    print("1. Add Data IDs only")
-                    print("2. Remove Data IDs only")
-                    addOrRemove = int(input("Select your editing type: "))
-                    dataIDs = [DataID.strip() for DataID in input("\nEnter the Data IDs you would like to add/remove, separated by commas: ").split(",")]
-                    try:
-                        resp3 = requests.post(
-                            f"{SERVER}/edit/step3", 
-                            json={"uid": uid, "did": did, "unblinded1": unblinded1, "addOrRemove": addOrRemove, "dataIDs": dataIDs}
-                        ).json()
-                        print(f"\nIndex edit, {resp3["result"]}.")
-                    except requests.exceptions.HTTPError as e:
-                        print("Step 3 failed:", e.response.json()["detail"])
-                        input("Press Enter to continue...")
-                        return
+                elif database == 2:
+                    print("\n===== Encrypted Index Database Editing =====")
+                    indexes = [index.strip() for index in input("Enter list of indexes you would like to edit, separated by commas: ").split(",")]
+                    entries = len(indexes)
+                    for i in range(entries):
+                        index = int(indexes[i])
+                        print(f"\nCurrently editing: index {index}.")
+                        hashed_index = hash_int(index) % p
+                        r1 = random_coprime(p - 1)
+
+                        blinded = pow(hashed_index, dk * r1, p)
+
+                        try:
+                            resp2 = requests.post(
+                                f"{SERVER}/edit/step2",
+                                json={"uid": uid, "did": did, "blinded": blinded}
+                            )
+                            resp2.raise_for_status()
+                        except requests.exceptions.HTTPError as e:
+                            print("Step 2 failed:", e.response.json()["detail"])
+                            input("Press Enter to continue...")
+                            return
+                        
+                        try:
+                            blinded2 = resp2.json()["blinded2"]
+                        except KeyError:
+                            print("Unexpected response from server:", resp2.json())
+                            input("Press Enter to continue...")
+                            return
+
+                        r1_inv = pow(r1, -1, p - 1)
+                        unblinded1 = pow(blinded2, r1_inv, p)
+                        print("You can edit this index in 2 ways: ")
+                        print("1. Add Data IDs only")
+                        print("2. Remove Data IDs only")
+                        addOrRemove = int(input("Select your editing type: "))
+                        dataIDs = [DataID.strip() for DataID in input("\nEnter the Data IDs you would like to add/remove, separated by commas: ").split(",")]
+                        try:
+                            resp3 = requests.post(
+                                f"{SERVER}/edit/step3", 
+                                json={"uid": uid, "did": did, "unblinded1": unblinded1, "addOrRemove": addOrRemove, "dataIDs": dataIDs}
+                            ).json()
+                            print(f"\nIndex edit, {resp3["result"]}.")
+                        except requests.exceptions.HTTPError as e:
+                            print("Step 3 failed:", e.response.json()["detail"])
+                            input("Press Enter to continue...")
+                            return
+                
+                else:
+                    print("Please select a valid function.")
 
             elif choice == 3:
                 print("Goodbye!")
@@ -300,7 +308,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
             
             else:
                 print("Please select a valid function.")
-        except KeyError:
+        except ValueError:
             print("Please select a valid function.")
 
 def runClient():
