@@ -197,59 +197,117 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
 
                 if database == 1:
                     dataEntryType = int(input("Is the data for new students (1) or existing students (2)? "))
-                    print("\nEditing student data...")
-                    print("Format: {DataID1:'Student Data 1', DataID2:'Student Data 2'}")
+
                     if dataEntryType == 1:
-                        print("(New Data) Input any integer for DataID.")
-                    SData = ast.literal_eval(input("Enter student data: "))
+                        print("Format: {0:'Student Data 1', 0:'Student Data 2'}")
+                        SData = ast.literal_eval(input("Enter student data to be added: "))
 
-                    message_str = "Encrypt Data"
-                    message_bytes = message_str.encode()
-                    msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
-                    msgSignature_str = base64.b64encode(msgSignature).decode()
-                    deviceCert_bytes = devicecert.public_bytes(
-                        encoding=serialization.Encoding.PEM,
-                        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                    )
-                    deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
-                    deviceSignature_str = base64.b64encode(devicesignature).decode()
-
-                    # connect to admin device
-                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                        print(f"\nConnecting to administrator device at {adminip}:{adminport} for student data encryption...")
-                        s.connect((adminip, adminport))
-                        data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
-                        s.sendall(json.dumps(data).encode())
-                        SData = json.loads(s.recv(4096).decode())
-                        if SData == b"REJECTED":
-                            print("[Administrator] Encryption Request Rejected. Press Enter to continue...")
-                            return
-                        else:
-                            print("[Administrator] Encryption Request Accepted.")
-
-                    try:
-                        resp1 = requests.post(
-                            f"{SERVER}/edit/step1", 
-                            json={"dataEntryType": dataEntryType, "SData": SData}
+                        message_str = "Encrypt Data"
+                        message_bytes = message_str.encode()
+                        msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
+                        msgSignature_str = base64.b64encode(msgSignature).decode()
+                        deviceCert_bytes = devicecert.public_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
                         )
-                        resp1.raise_for_status()
-                    except requests.exceptions.HTTPError as e:
-                        print("Step 1 failed:", e.response.json()["detail"])
-                        input("Press Enter to continue...")
-                        return
+                        deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
+                        deviceSignature_str = base64.b64encode(devicesignature).decode()
+
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                            print(f"\nConnecting to administrator device at {adminip}:{adminport} for student data encryption...")
+                            s.connect((adminip, adminport))
+                            data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
+                            s.sendall(json.dumps(data).encode())
+                            SData = json.loads(s.recv(4096).decode())
+                            if SData == b"REJECTED":
+                                print("[Administrator] Encryption Request Rejected. Press Enter to continue...")
+                                return
+                            else:
+                                print("[Administrator] Encryption Request Accepted.")
+
+                        try:
+                            resp1 = requests.post(
+                                f"{SERVER}/edit/new",
+                                json = {"SData":SData}
+                            )
+                            resp1.raise_for_status()
+                        except requests.exceptions.HTTPError as e:
+                            print("Editing failed:", e.response.json()["detail"])
+                            input("Press Enter to continue...")
+                            continue
+
                     
-                    try:
-                        newDataIDList = resp1.json()["newDataIDList"]
-                    except KeyError:
-                        print("\nUnexpected response from server:", resp1.json())
-                        input("Press Enter to continue...")
-                        return
-                    
-                    if dataEntryType == 1: # if new student data is added
-                        print("\nStudent database successfully edited.")
-                        print(f"DataIDs of new students: {newDataIDList}")
+                        try:
+                            newDataIDList = resp1.json()["newDataIDList"]
+                            print("\nStudent database successfully edited.")
+                            print(f"DataIDs of new students: {newDataIDList}")
+                        except KeyError:
+                            print("\nUnexpected response from server:", resp1.json())
+                            input("Press Enter to continue...")
+                            return
+    
                     else:
-                        print("\nStudent database successfully edited.")
+                        print("Format: 1 2 3 4 5 (e.g.)")
+                        dataIDs = str(input("Enter DataIDs separated by space: "))
+
+                        dataIDs = list(map(int, dataIDs.split()))
+
+                        try:
+                            resp1 = requests.post(
+                                f"SERVER/edit/existing",
+                                json = {"DataIDs": dataIDs}
+                            )
+                            resp1.raise_for_status()
+                        except requests.exceptions.HTTPError as e:
+                            print("Editing failed:", e.response.json()["detail"])
+                            input("Press Enter to continue...")
+                            continue
+
+                        resp1 = resp1.json()
+                        resp1 = resp1["currentData"]
+
+                        print("Student data to be edited...")
+                        for key, value in resp1.items():
+                            print(f"{key}: {value}")
+
+                        print("Format: {DataID1:'Student Data 1', DataID2:'Student Data 2'}")
+                        SData = ast.literal_eval(input("Enter student data to be added: "))
+
+                        message_str = "Encrypt Data"
+                        message_bytes = message_str.encode()
+                        msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
+                        msgSignature_str = base64.b64encode(msgSignature).decode()
+                        deviceCert_bytes = devicecert.public_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                        )
+                        deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
+                        deviceSignature_str = base64.b64encode(devicesignature).decode()
+
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                            print(f"\nConnecting to administrator device at {adminip}:{adminport} for student data encryption...")
+                            s.connect((adminip, adminport))
+                            data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
+                            s.sendall(json.dumps(data).encode())
+                            SData = json.loads(s.recv(4096).decode())
+                            if SData == b"REJECTED":
+                                print("[Administrator] Encryption Request Rejected. Press Enter to continue...")
+                                return
+                            else:
+                                print("[Administrator] Encryption Request Accepted.")
+
+                        try:
+                            resp2 = requests.post(
+                                f"SERVER/edit/existing/update",
+                                json = {"SData":SData}
+                            )
+                            resp2.raise_for_status()
+                        except requests.exceptions.HTTPError as e:
+                            print("Editing failed:", e.response.json()["detail"])
+                            input("Press Enter to continue...")
+                            continue
+                    
+                    print("\nStudent database successfully edited.")
 
                 elif database == 2:
                     print("\n===== Encrypted Index Database Editing =====")

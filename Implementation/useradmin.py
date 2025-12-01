@@ -226,6 +226,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         plaintextData = b"REJECTED"
 
                     print(f"\n[Device {did}] Decryption successful")
+                    print("\nPress enter to revoke devices.")
                     
                     conn.sendall(json.dumps(plaintextData).encode())
                 
