@@ -135,6 +135,7 @@ class EvalStep2Response(BaseModel):
 
 class NewStudentRequest(BaseModel):
     uid: int
+    did: int
     SData: Dict[str, str]  # {proposed_id: data_val}
 
 class NewStudentResponse(BaseModel):
@@ -142,6 +143,7 @@ class NewStudentResponse(BaseModel):
 
 class ExistingStudentRequest(BaseModel):
     uid: int
+    did: int
     dataIDs: List[int]
 
 class ExistingStudentResponse(BaseModel):
@@ -149,6 +151,7 @@ class ExistingStudentResponse(BaseModel):
 
 class UpdateExistingRequest(BaseModel):
     uid: int
+    did: int
     SData: Dict[str, str]
 
 class UpdateExistingResponse(BaseModel):
@@ -343,6 +346,15 @@ def eval_step2(req: EvalStep2Request):
 
 @app.post("/edit/new", response_model=NewStudentResponse)
 def add_new_students(req: NewStudentRequest):
+    if req.uid not in userDB or req.did not in userDB[req.uid]["devices"]:
+        raise HTTPException(status_code=400, detail="Device not registered")
+
+    devices = userDB[req.uid]["devices"]
+    DSK = devices[req.did]["DSK"]
+
+    if DSK is None:
+        raise HTTPException(status_code=403, detail="Device revoked")
+
     user_student = userDB[req.uid]["studentData"]
     new_ids: List[int] = []
 
@@ -358,6 +370,15 @@ def add_new_students(req: NewStudentRequest):
 
 @app.post("/edit/existing", response_model=ExistingStudentResponse)
 def get_existing_students(req: ExistingStudentRequest):
+    if req.uid not in userDB or req.did not in userDB[req.uid]["devices"]:
+        raise HTTPException(status_code=400, detail="Device not registered")
+
+    devices = userDB[req.uid]["devices"]
+    DSK = devices[req.did]["DSK"]
+
+    if DSK is None:
+        raise HTTPException(status_code=403, detail="Device revoked")
+
     user_student = userDB[req.uid]["studentData"]
     current_data: Dict[int, str] = {}
 
@@ -370,6 +391,15 @@ def get_existing_students(req: ExistingStudentRequest):
 
 @app.post("/edit/existing/update", response_model=UpdateExistingResponse)
 def update_existing_students(req: UpdateExistingRequest):
+    if req.uid not in userDB or req.did not in userDB[req.uid]["devices"]:
+        raise HTTPException(status_code=400, detail="Device not registered")
+
+    devices = userDB[req.uid]["devices"]
+    DSK = devices[req.did]["DSK"]
+
+    if DSK is None:
+        raise HTTPException(status_code=403, detail="Device revoked")
+
     user_student = userDB[req.uid]["studentData"]
 
     for data_id_str, data_val in req.SData.items():

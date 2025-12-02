@@ -228,7 +228,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                         try:
                             resp1 = requests.post(
                                 f"{SERVER}/edit/new",
-                                json = {"uid": uid, "SData":SData}
+                                json = {"uid": uid, "did": did, "SData":SData}
                             )
                             resp1.raise_for_status()
                         except requests.exceptions.HTTPError as e:
@@ -254,7 +254,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                         try:
                             resp1 = requests.post(
                                 f"{SERVER}/edit/existing",
-                                json = {"uid": uid, "dataIDs": dataIDs}
+                                json = {"uid": uid, "did": did, "dataIDs": dataIDs}
                             )
                             resp1.raise_for_status()
                         except requests.exceptions.HTTPError as e:
@@ -325,7 +325,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                         try:
                             resp2 = requests.post(
                                 f"{SERVER}/edit/existing/update",
-                                json = {"uid": uid, "SData": SData}
+                                json = {"uid": uid, "did": did, "SData": SData}
                             )
                             resp2.raise_for_status()
                         except requests.exceptions.HTTPError as e:
