@@ -104,14 +104,18 @@ class RevokeRequest(BaseModel):
     revoke_did: int
     message_str: str
     msgSignature_str: str
-    deviceCert_str: str
-    deviceSignature_str: str
 
 class RevokeResponse(BaseModel):
     result: str
 
 class RevokeListResponse(BaseModel):
     dids: List[int]
+
+class SuperRevokeRequest(BaseModel):
+    uid: int
+
+class SuperRevokeResponse(BaseModel):
+    result: str
 
 class EvalStep1Request(BaseModel):
     uid: int
@@ -275,26 +279,34 @@ def revoke(req: RevokeRequest):
     if userDB[req.uid]["devices"][req.revoke_did]["DSK"] is None:
         raise HTTPException(status_code=409, detail="Target device already revoked")
 
-    # verify certificates
     schoolCert = userDB[req.uid]["cert"]
     if schoolCert is None:
         raise HTTPException(status_code=400, detail="School certificate not found for this user")
 
-    device_bytes = base64.b64decode(req.deviceCert_str.encode())
-    deviceCert = cast(dsa.DSAPublicKey, serialization.load_pem_public_key(device_bytes))
-    device_sig_bytes = base64.b64decode(req.deviceSignature_str.encode())
     msg_bytes = req.message_str.encode()
     sig_bytes = base64.b64decode(req.msgSignature_str.encode())
 
     try:
-        schoolCert.verify(device_sig_bytes, device_bytes, hashes.SHA256())
-        deviceCert.verify(sig_bytes, msg_bytes, hashes.SHA256())
+        schoolCert.verify(sig_bytes, msg_bytes, hashes.SHA256())
     except InvalidSignature:
-        raise HTTPException(status_code=403, detail="Invalid signature")
-
-    # revoke
+        raise HTTPException(status_code=403, detail="Invalid signature from school")
     userDB[req.uid]["devices"][req.revoke_did]["DSK"] = None
     return {"result": "Revocation completed"}
+
+@app.post("/super_revoke", response_model=SuperRevokeResponse)
+def super_revoke(req: SuperRevokeRequest):
+    try:
+        userDB[req.uid] = UserDBEntry(
+            cert=None,
+            name=userDB[req.uid]["name"],
+            devices={did: {"DSK": None, "constant": dev["constant"]} 
+                     for did, dev in userDB[req.uid]["devices"].items()},
+            studentData={},
+            indexData={}
+        )
+    except KeyError:
+        raise HTTPException(status_code=400, detail="Target school not found")
+    return {"result": "Revocation completed."}
 
 @app.post("/eval/step1", response_model=EvalStep1Response)
 def eval_step1(req: EvalStep1Request):

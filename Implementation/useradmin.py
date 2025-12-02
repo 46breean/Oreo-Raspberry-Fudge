@@ -321,6 +321,14 @@ def revoke_device(uid: int, did: int, schoolprivatekey: dsa.DSAPrivateKey):
     ).json()
     print(revocation["result"])
 
+    # uid: int
+    # did: int
+    # revoke_did: int
+    # message_str: str
+    # msgSignature_str: str
+    # deviceCert_str: str
+    # deviceSignature_str: str
+
 p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729) # pyright: ignore[reportUnknownMemberType]
 
