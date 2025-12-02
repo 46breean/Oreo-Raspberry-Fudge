@@ -425,6 +425,12 @@ def edit_step2(req: EditStep2Request):
 
 @app.post("/edit/step3", response_model=EditStep3Response)
 def edit_step3(req: EditStep3Request):
+    if req.uid not in userDB or req.did not in userDB[req.uid]["devices"]:
+        raise HTTPException(400, "Device not registered")
+
+    if userDB[req.uid]["devices"][req.did]["DSK"] is None:
+        raise HTTPException(403, "Device revoked")
+
     key = (req.uid, req.did)
     if key not in r2_store:
         raise HTTPException(status_code=400, detail="No pending edit")
