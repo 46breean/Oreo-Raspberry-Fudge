@@ -130,18 +130,21 @@ class EvalStep2Response(BaseModel):
     query_result: Dict[int, str]
 
 class NewStudentRequest(BaseModel):
+    uid: int
     SData: Dict[str, str]  # {proposed_id: data_val}
 
 class NewStudentResponse(BaseModel):
     newDataIDList: List[int]
 
 class ExistingStudentRequest(BaseModel):
+    uid: int
     dataIDs: List[int]
 
 class ExistingStudentResponse(BaseModel):
     currentData: Dict[int, str]
 
 class UpdateExistingRequest(BaseModel):
+    uid: int
     SData: Dict[str, str]
 
 class UpdateExistingResponse(BaseModel):
@@ -326,7 +329,7 @@ def eval_step2(req: EvalStep2Request):
 
 @app.post("/edit/new", response_model=NewStudentResponse)
 def add_new_students(req: NewStudentRequest):
-    user_student = userDB[1]["studentData"]
+    user_student = userDB[req.uid]["studentData"]
     new_ids: List[int] = []
 
     for data_id_str, data_val in req.SData.items():
@@ -341,7 +344,7 @@ def add_new_students(req: NewStudentRequest):
 
 @app.post("/edit/existing", response_model=ExistingStudentResponse)
 def get_existing_students(req: ExistingStudentRequest):
-    user_student = userDB[1]["studentData"]
+    user_student = userDB[req.uid]["studentData"]
     current_data: Dict[int, str] = {}
 
     for data_id in req.dataIDs:
@@ -353,7 +356,7 @@ def get_existing_students(req: ExistingStudentRequest):
 
 @app.post("/edit/existing/update", response_model=UpdateExistingResponse)
 def update_existing_students(req: UpdateExistingRequest):
-    user_student = userDB[1]["studentData"]
+    user_student = userDB[req.uid]["studentData"]
 
     for data_id_str, data_val in req.SData.items():
         data_id = int(data_id_str)  # cast to int
