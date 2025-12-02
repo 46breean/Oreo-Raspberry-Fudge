@@ -137,6 +137,11 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         data = json.load(f)
                     os.remove(tmp_path)
 
+                    if isinstance(data, str) and data == "REJECTED":
+                        conn.sendall(b"REJECTED")
+                        print("\nDevice registration rejected by admin.")
+                        continue
+
                     deviceCert_bytes = base64.b64decode(deviceCert_str.encode())
                     deviceCert_publicKeyTypes = serialization.load_pem_public_key(deviceCert_bytes)
                     devicecert = cast(dsa.DSAPublicKey, deviceCert_publicKeyTypes)
@@ -145,7 +150,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
 
                     regData = {"DID": data[0], "DK": data[1], "deviceSignature_str": deviceSignature_str}
                     conn.sendall(json.dumps(regData).encode())
-                    print(f"\nDevice registration for DID {data[0]} completed.")
+                    print(f"\n\nDevice registration for DID {data[0]} completed.")
                     print("\nPress enter to revoke devices.")
                 
                 elif deviceMsg == "Encrypt Data":

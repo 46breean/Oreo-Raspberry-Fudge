@@ -1,4 +1,4 @@
-import sys, random, requests, ast, json
+import sys, random, requests, ast, json, os
 
 SERVER = "http://172.22.13.14:8000"
 
@@ -38,6 +38,8 @@ def handle_registration(uid: int, did: int, keyproduct:list[int], addr:str, tmp_
             try:
                 register.raise_for_status()
                 register_data = register.json()
+                new_did:int = register_data["new_did"]
+                data = [new_did, new_dk]
                 break
             except requests.exceptions.HTTPError as e:
                 try:
@@ -46,18 +48,21 @@ def handle_registration(uid: int, did: int, keyproduct:list[int], addr:str, tmp_
                 except ValueError:
                     # If response is not JSON
                     err_detail = e.response.text or str(e)
+                
+                data = "REJECTED"
                 print("Registration failed:", err_detail)
-                continue  # try again or break depending on your logic
-        new_did:int = register_data["new_did"]
-        data = [new_did, new_dk]
+                break
 
     else:
-        data = b"REJECTED"
+        data = "REJECTED"
 
-    with open(tmp_path, "w") as f:
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(data, f)
+        f.flush()
+        os.fsync(f.fileno())  # ensures it's actually written to disk
 
-    input("\nPress Enter to continue...")
+    print("\nRegistration decision saved. Press Enter to continue...")
+    input()
 
 uid, did, addr, keyproduct, tmp_path = sys.argv[1:]
 uid = int(uid)

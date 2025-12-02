@@ -97,6 +97,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
         print("\nDevice Menu:")
         print("1. Evaluate and Query")
         print("2. Edit Database")
+        print("3. Exit")
         choice = int(input("Select function: "))
 
         try:
@@ -382,10 +383,14 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                             print("Step 3 failed:", e.response.json()["detail"])
                             input("Press Enter to continue...")
                             return
-                
+
                 else:
                     print("Please select a valid function.")
             
+            elif choice == 3:
+                print("Goodbye!")
+                sys.exit(1)
+
             else:
                 print("Please select a valid function.")
         except KeyError:
