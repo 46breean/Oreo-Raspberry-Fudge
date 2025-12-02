@@ -98,7 +98,7 @@ def get_local_ip() -> str:
         s.close()
     return ip
 
-def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPublicKey , devicecert:dsa.DSAPublicKey, schoolprivatekey:dsa.DSAPrivateKey, schoolenckey:bytes):
+def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPublicKey, schoolprivatekey:dsa.DSAPrivateKey, schoolenckey:bytes):
     regData: dict[str,int|str]
     
     HOST = get_local_ip()
@@ -182,11 +182,8 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     for DataID, Data in plaintextdata.items():
                         ciphertextdata[DataID] = encryptData(Data, schoolenckey)
                     print(f"\n[Device {did}] Encryption successful.")
-<<<<<<< HEAD
                     print ("\nPress enter to revoke devices.")
 
-=======
->>>>>>> e4979c3b04d424032a4b22144ad9f76e9ee738c1
                     conn.sendall(json.dumps(ciphertextdata).encode())
                 
                 elif deviceMsg == "Decrypt Data":
@@ -224,11 +221,8 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         plaintextData[DataID] = decryptData(Data, schoolenckey)
 
                     print(f"\n[Device {did}] Decryption successful")
-<<<<<<< HEAD
                     print("\nPress enter to revoke devices.")
                     
-=======
->>>>>>> e4979c3b04d424032a4b22144ad9f76e9ee738c1
                     conn.sendall(json.dumps(plaintextData).encode())
                 
                 else:
@@ -355,9 +349,9 @@ def runUserAdmin():
         # state["schoolPrivateKey"] = schoolprivatekey
         # state["schoolCert"] = schoolcert
         # save_state(state)
-        return uid, did, dk, keyproduct, schoolenckey, schoolenckey, schoolprivatekey, schoolcert
+        return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert
 
-UID, DID, DK, keyProduct, schoolEncKey, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
+UID, DID, DK, keyProduct, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
 
 #start listener
 listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct, schoolCert, schoolPrivateKey, schoolEncKey), daemon=False)

@@ -331,6 +331,7 @@ def add_new_students(req: NewStudentRequest):
 
     for data_id_str, data_val in req.SData.items():
         data_id = int(data_id_str)
+        data_id = random.randint(10**7, 10**8 - 1)
         while data_id in user_student:
             data_id = random.randint(10**7, 10**8 - 1)
         user_student[data_id] = data_val

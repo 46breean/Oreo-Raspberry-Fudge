@@ -66,6 +66,10 @@ def handle_user_connection(conn: socket.socket, masterEncKey: bytes):
                 elif active_otps[username] == None:
                     conn.sendall(json.dumps("REJECTED").encode())
                     print("User has already been initialised.")
+                    print("\nServer Administrator Menu:")
+                    print("1. Initialise new user.")
+                    print("2. Revoke user.")
+                    print("Select function: ")
                     return
                 elif userotp != active_otps[username]:
                     conn.sendall(json.dumps("REJECTED").encode())

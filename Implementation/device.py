@@ -191,6 +191,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
             
                 print(f"\nStudent Data requested: \n{StudentData}")
 
+
             elif choice == 2:
 
                 database = int(input("\nWould you like to edit student database (1) or encrypted index database (2)? "))
@@ -239,7 +240,6 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                     
                         try:
                             newDataIDList = resp1.json()["newDataIDList"]
-                            print("\nStudent database successfully edited.")
                             print(f"DataIDs of new students: {newDataIDList}")
                         except KeyError:
                             print("\nUnexpected response from server:", resp1.json())
@@ -254,8 +254,8 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
 
                         try:
                             resp1 = requests.post(
-                                f"SERVER/edit/existing",
-                                json = {"DataIDs": dataIDs}
+                                f"{SERVER}/edit/existing",
+                                json = {"dataIDs": dataIDs}
                             )
                             resp1.raise_for_status()
                         except requests.exceptions.HTTPError as e:
@@ -266,8 +266,35 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                         resp1 = resp1.json()
                         resp1 = resp1["currentData"]
 
+
+                        message_str = "Decrypt Data"
+                        message_bytes = message_str.encode()
+                        msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
+                        msgSignature_str = base64.b64encode(msgSignature).decode()
+                        deviceCert_bytes = devicecert.public_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                        )
+                        deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
+                        deviceSignature_str = base64.b64encode(devicesignature).decode()
+                        
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                            print(f"\nConnecting to administrator device at {adminip}:{adminport} for student data decryption...")
+                            s.connect((adminip, adminport))
+                            data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": resp1, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
+                            s.sendall(json.dumps(data).encode())
+                            SData = json.loads(s.recv(4096).decode())
+                            if SData == b"REJECTED":
+                                print("[Administrator] Decryption Request Rejected, device has been revoked.")
+                                sys.exit(1)
+                            else:
+                                print("[Administrator] Decryption Request Accepted.\n ")
+                                StudentData:dict[int,str] = {}
+                                for DataID, Data in list(SData.items()):
+                                    StudentData[int(DataID)] = Data
+
                         print("Student data to be edited...")
-                        for key, value in resp1.items():
+                        for key, value in StudentData.items():
                             print(f"{key}: {value}")
 
                         print("Format: {DataID1:'Student Data 1', DataID2:'Student Data 2'}")
@@ -298,7 +325,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
 
                         try:
                             resp2 = requests.post(
-                                f"SERVER/edit/existing/update",
+                                f"{SERVER}/edit/existing/update",
                                 json = {"SData":SData}
                             )
                             resp2.raise_for_status()
@@ -366,8 +393,8 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
             
             else:
                 print("Please select a valid function.")
-        except ValueError:
-            print("Please select a valid function.")
+        except KeyError:
+            print("Please enter a valid input.")
 
 def runClient():
     # start_state = load_state()
