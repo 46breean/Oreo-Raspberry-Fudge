@@ -362,7 +362,9 @@ def runUserAdmin():
 UID, DID, DK, keyProduct, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
 
 #start listener
-listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct, schoolCert, schoolPrivateKey, schoolEncKey), daemon=False)
+stop_event = threading.Event()
+
+listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyProduct, schoolCert, schoolPrivateKey, schoolEncKey), daemon=True)
 listener_thread.start()
 
 while True:

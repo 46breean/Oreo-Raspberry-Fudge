@@ -184,6 +184,8 @@ def device_location(uid: int = Query(...), did: int = Query(...)) -> Dict[str, U
     key = (uid, did)
     if key not in device_locations:
         raise HTTPException(status_code=404, detail="Device not found")
+    if uid != 1 and userDB[uid]["devices"][did]["DSK"] == None:
+        raise HTTPException(status_code=403, detail="Device has been revoked")
     ip, port = device_locations[key]
     return {"ip": ip, "port": port}
 

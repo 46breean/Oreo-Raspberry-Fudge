@@ -97,7 +97,6 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
         print("\nDevice Menu:")
         print("1. Evaluate and Query")
         print("2. Edit Database")
-        print("3. Exit")
         choice = int(input("Select function: "))
 
         try:
@@ -386,10 +385,6 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 
                 else:
                     print("Please select a valid function.")
-
-            elif choice == 3:
-                print("Goodbye!")
-                break
             
             else:
                 print("Please select a valid function.")
