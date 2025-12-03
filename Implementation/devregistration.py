@@ -43,10 +43,10 @@ def handle_registration(uid: int, did: int, keyproduct:list[int], addr:str, tmp_
                 break
             except requests.exceptions.HTTPError as e:
                 try:
-                    # Try to extract JSON error detail
+                    # extract JSON error detail
                     err_detail = e.response.json().get("detail", str(e))
                 except ValueError:
-                    # If response is not JSON
+                    # if response is not JSON
                     err_detail = e.response.text or str(e)
                 
                 data = "REJECTED"
@@ -59,14 +59,16 @@ def handle_registration(uid: int, did: int, keyproduct:list[int], addr:str, tmp_
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(data, f)
         f.flush()
-        os.fsync(f.fileno())  # ensures it's actually written to disk
+        os.fsync(f.fileno())
 
     print("\nRegistration decision saved. Press Enter to continue...")
     input()
 
-uid, did, addr, keyproduct, tmp_path = sys.argv[1:]
-uid = int(uid)
-did = int(did)
-keyproduct = ast.literal_eval(keyproduct)
 
-handle_registration(uid, did, keyproduct, addr, tmp_path)
+if __name__ == "__main__":
+    uid, did, addr, keyproduct, tmp_path = sys.argv[1:]
+    uid = int(uid)
+    did = int(did)
+    keyproduct = ast.literal_eval(keyproduct)
+
+    handle_registration(uid, did, keyproduct, addr, tmp_path)

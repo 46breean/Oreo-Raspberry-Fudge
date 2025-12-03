@@ -155,7 +155,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                 
                 elif deviceMsg == "Encrypt Data":
                     # retrieving DID and SData
-                    did = data["DID"]
+                    device_did = data["DID"]
                     plaintextdata: dict[str, str] = data["StudentData"]
 
                     # verifying device
@@ -186,14 +186,14 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     ciphertextdata = {}
                     for DataID, Data in plaintextdata.items():
                         ciphertextdata[DataID] = encryptData(Data, schoolenckey)
-                    print(f"\n[Device {did}] Encryption successful.")
+                    print(f"\n[Device {device_did}] Encryption successful.")
                     print ("\nPress enter to revoke devices.")
 
                     conn.sendall(json.dumps(ciphertextdata).encode())
                 
                 elif deviceMsg == "Decrypt Data":
                     # retrieving DID and SData
-                    did = data["DID"]
+                    device_did = data["DID"]
                     ciphertextData: dict[str, str] = data["StudentData"]
 
                     # verifying device
@@ -225,7 +225,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     for DataID, Data in ciphertextData.items():
                         plaintextData[DataID] = decryptData(Data, schoolenckey)
 
-                    print(f"\n[Device {did}] Decryption successful")
+                    print(f"\n[Device {device_did}] Decryption successful")
                     print("\nPress enter to revoke devices.")
                     
                     conn.sendall(json.dumps(plaintextData).encode())
@@ -290,7 +290,7 @@ def initialisation():
             else:
                 print("\nCorrect OTP. Beginning initialisation...")
                 schoolenckey_int = int(response)
-                schoolenckey = schoolenckey_int.to_bytes(32, "big") 
+                schoolenckey = schoolenckey_int.to_bytes(32, "big")
 
         #Registration with server
         requests.post(

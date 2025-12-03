@@ -6,7 +6,7 @@ import os
 import base64
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-from typing import TypedDict, Dict, List, Tuple, Optional, cast, Union
+from typing import TypedDict, cast
 from contextlib import asynccontextmanager
 from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives import hashes, serialization
@@ -17,19 +17,19 @@ P = 29996224275833  # prime modulus
 # database types
 
 class UserDevice(TypedDict):
-    DSK: Optional[int]
+    DSK: int|None
     constant: int
 
 class UserDBEntry(TypedDict):
-    cert: Optional[dsa.DSAPublicKey]
+    cert: dsa.DSAPublicKey|None
     name: str
-    devices: Dict[int, UserDevice]
-    studentData: Dict[int, str]
-    indexData: Dict[int, List[int]]
+    devices: dict[int, UserDevice]
+    studentData: dict[int, str]
+    indexData: dict[int, list[int]]
 
-userDB: Dict[int, UserDBEntry] = {}
-device_locations: Dict[Tuple[int, int], Tuple[str, int]] = {}
-r2_store: Dict[Tuple[int, int], int] = {}
+userDB: dict[int, UserDBEntry] = {}
+device_locations: dict[tuple[int, int], tuple[str, int]] = {}
+r2_store: dict[tuple[int, int], int] = {}
 
 STATE_FILE = "server_state.pk1"
 
@@ -109,7 +109,7 @@ class RevokeResponse(BaseModel):
     result: str
 
 class RevokeListResponse(BaseModel):
-    dids: List[int]
+    dids: list[int]
 
 class SuperRevokeRequest(BaseModel):
     uid: int
@@ -131,28 +131,28 @@ class EvalStep2Request(BaseModel):
     unblinded1: int
 
 class EvalStep2Response(BaseModel):
-    query_result: Dict[int, str]
+    query_result: dict[int, str]
 
 class NewStudentRequest(BaseModel):
     uid: int
     did: int
-    SData: Dict[str, str]  # {proposed_id: data_val}
+    SData: dict[str, str]  # {proposed_id: data_val}
 
 class NewStudentResponse(BaseModel):
-    newDataIDList: List[int]
+    newDataIDList: list[int]
 
 class ExistingStudentRequest(BaseModel):
     uid: int
     did: int
-    dataIDs: List[int]
+    dataIDs: list[int]
 
 class ExistingStudentResponse(BaseModel):
-    currentData: Dict[int, str]
+    currentData: dict[int, str]
 
 class UpdateExistingRequest(BaseModel):
     uid: int
     did: int
-    SData: Dict[str, str]
+    SData: dict[str, str]
 
 class UpdateExistingResponse(BaseModel):
     result: str
@@ -170,7 +170,7 @@ class EditStep3Request(BaseModel):
     did: int
     unblinded1: int
     addOrRemove: int
-    dataIDs: List[str]
+    dataIDs: list[str]
 
 class EditStep3Response(BaseModel):
     result: str
@@ -183,7 +183,7 @@ def announce(req: AnnounceRequest):
     return {"result": "ok"}
 
 @app.get("/device_location", response_model=DeviceLocationResponse)
-def device_location(uid: int = Query(...), did: int = Query(...)) -> Dict[str, Union[str, int]]:
+def device_location(uid: int = Query(...), did: int = Query(...)) -> dict[str, str|int]:
     key = (uid, did)
     if key not in device_locations:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -356,7 +356,7 @@ def add_new_students(req: NewStudentRequest):
         raise HTTPException(status_code=403, detail="Device revoked")
 
     user_student = userDB[req.uid]["studentData"]
-    new_ids: List[int] = []
+    new_ids: list[int] = []
 
     for data_id_str, data_val in req.SData.items():
         data_id = int(data_id_str)
@@ -380,7 +380,7 @@ def get_existing_students(req: ExistingStudentRequest):
         raise HTTPException(status_code=403, detail="Device revoked")
 
     user_student = userDB[req.uid]["studentData"]
-    current_data: Dict[int, str] = {}
+    current_data: dict[int, str] = {}
 
     for data_id in req.dataIDs:
         if data_id not in user_student:
