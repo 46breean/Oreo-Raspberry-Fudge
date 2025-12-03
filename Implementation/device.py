@@ -17,7 +17,7 @@ def load_state(filename:str = 'client_state.pk1'):
     with open(filename, "rb") as f:
         return pickle.load(f)
 
-def hash_int(x: int):
+def hash_str(x: str):
     m = hashlib.sha256()
     m.update(str(x).encode())
     return int(m.hexdigest(), 16)
@@ -114,8 +114,8 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
 
                 indexes = [index.strip() for index in input("Enter student data quer(ies) separated by commas: ").split(",")]
                 for index in indexes:
-                    intIndex = int(index)
-                    hashed_index = hash_int(intIndex) % p
+                    intIndex = str(index)
+                    hashed_index = hash_str(intIndex) % p
 
                     # blinding
                     r1 = random_coprime(p - 1)
@@ -345,9 +345,9 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                     indexes = [index.strip() for index in input("Enter list of indexes you would like to edit, separated by commas: ").split(",")]
                     entries = len(indexes)
                     for i in range(entries):
-                        index = int(indexes[i])
+                        index = str(indexes[i])
                         print(f"\nCurrently editing: index {index}.")
-                        hashed_index = hash_int(index) % p
+                        hashed_index = hash_str(index) % p
                         r1 = random_coprime(p - 1)
 
                         blinded = pow(hashed_index, dk * r1, p)
