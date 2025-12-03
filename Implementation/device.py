@@ -83,7 +83,7 @@ def registration():
             admin_reply = s.recv(4096).decode()
             if admin_reply == "REJECTED":
                 print("[Administrator] Registration Request Rejected.")
-                sys.exit()
+                sys.exit(1)
             else:
                 adminReply = json.loads(admin_reply)
                 did, dk, deviceSignature_str = adminReply["DID"], adminReply["DK"], str(adminReply["deviceSignature_str"])
@@ -179,11 +179,12 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                     s.connect((adminip, adminport))
                     data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
                     s.sendall(json.dumps(data).encode())
-                    SData = json.loads(s.recv(4096).decode())
-                    if SData == b"REJECTED":
+                    SData = s.recv(4096).decode()
+                    if SData == "REJECTED":
                         print("[Administrator] Decryption Request Rejected, device has been revoked.")
                         sys.exit(1)
                     else:
+                        SData = json.loads(SData)
                         print("[Administrator] Decryption Request Accepted.")
                         StudentData:dict[int,str] = {}
                         for DataID, Data in list(SData.items()):
@@ -219,11 +220,12 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                             s.connect((adminip, adminport))
                             data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
                             s.sendall(json.dumps(data).encode())
-                            SData = json.loads(s.recv(4096).decode())
-                            if SData == b"REJECTED":
-                                print("[Administrator] Encryption Request Rejected. Press Enter to continue...")
-                                return
+                            SData = s.recv(4096).decode()
+                            if SData == "REJECTED":
+                                print("[Administrator] Encryption Request Rejected.")
+                                sys.exit(1)
                             else:
+                                SData = json.loads(SData)
                                 print("[Administrator] Encryption Request Accepted.")
 
                         try:
@@ -283,11 +285,12 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                             s.connect((adminip, adminport))
                             data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": resp1, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
                             s.sendall(json.dumps(data).encode())
-                            SData = json.loads(s.recv(4096).decode())
-                            if SData == b"REJECTED":
+                            SData = s.recv(4096).decode()
+                            if SData == "REJECTED":
                                 print("[Administrator] Decryption Request Rejected, device has been revoked.")
                                 sys.exit(1)
                             else:
+                                SData = json.loads(SData)
                                 print("[Administrator] Decryption Request Accepted.\n ")
                                 StudentData:dict[int,str] = {}
                                 for DataID, Data in list(SData.items()):
@@ -316,11 +319,12 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                             s.connect((adminip, adminport))
                             data = {"deviceMsg": "Encrypt Data", "DID": did, "StudentData": SData, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
                             s.sendall(json.dumps(data).encode())
-                            SData = json.loads(s.recv(4096).decode())
-                            if SData == b"REJECTED":
-                                print("[Administrator] Encryption Request Rejected. Press Enter to continue...")
-                                return
+                            SData = s.recv(4096).decode()
+                            if SData == "REJECTED":
+                                print("[Administrator] Encryption Request Rejected.")
+                                sys.exit(1)
                             else:
+                                SData = json.loads(SData)
                                 print("[Administrator] Encryption Request Accepted.")
 
                         try:

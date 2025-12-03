@@ -9,8 +9,8 @@ from pydantic import BaseModel
 from typing import TypedDict, cast
 from contextlib import asynccontextmanager
 from cryptography.hazmat.primitives.asymmetric import dsa
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import serialization
+# from cryptography.exceptions import InvalidSignature
 
 P = 29996224275833  # prime modulus
 
@@ -102,8 +102,8 @@ class RevokeRequest(BaseModel):
     uid: int
     did: int
     revoke_did: int
-    message_str: str
-    msgSignature_str: str
+    # message_str: str
+    # msgSignature_str: str
 
 class RevokeResponse(BaseModel):
     result: str
@@ -284,17 +284,17 @@ def revoke(req: RevokeRequest):
     if userDB[req.uid]["devices"][req.revoke_did]["DSK"] is None:
         raise HTTPException(status_code=409, detail="Target device already revoked")
 
-    schoolCert = userDB[req.uid]["cert"]
-    if schoolCert is None:
-        raise HTTPException(status_code=400, detail="School certificate not found for this user")
+    # schoolCert = userDB[req.uid]["cert"]
+    # if schoolCert is None:
+    #     raise HTTPException(status_code=400, detail="School certificate not found for this user")
 
-    msg_bytes = req.message_str.encode()
-    sig_bytes = base64.b64decode(req.msgSignature_str.encode())
+    # msg_bytes = req.message_str.encode()
+    # sig_bytes = base64.b64decode(req.msgSignature_str.encode())
 
-    try:
-        schoolCert.verify(sig_bytes, msg_bytes, hashes.SHA256())
-    except InvalidSignature:
-        raise HTTPException(status_code=403, detail="Invalid signature from school")
+    # try:
+    #     schoolCert.verify(sig_bytes, msg_bytes, hashes.SHA256())
+    # except InvalidSignature:
+    #     raise HTTPException(status_code=403, detail="Invalid signature from school")
     userDB[req.uid]["devices"][req.revoke_did]["DSK"] = None
     return {"result": "Revocation completed"}
 
