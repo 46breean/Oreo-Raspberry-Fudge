@@ -296,6 +296,7 @@ def revoke_list(uid: int = Query(...), did: int = Query(...)):
     if userDB[uid]["devices"][did]["DSK"] is None:
         raise HTTPException(status_code=403, detail="Device revoked")
     dids = [d for d, v in userDB[uid]["devices"].items() if v["DSK"] is not None]
+    dids.pop(0)
     return {"dids": dids}
 
 @app.post("/revoke", response_model=RevokeResponse)
