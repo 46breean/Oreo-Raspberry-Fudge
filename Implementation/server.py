@@ -27,9 +27,10 @@ class UserDBEntry(TypedDict):
     studentData: dict[int, str]
     indexData: dict[int, list[int]]
 
-userDB: dict[int, UserDBEntry] = {}
+userDB: dict[int, UserDBEntry] = {} # uid, userDBEntry
 device_locations: dict[tuple[int, int], tuple[str, int]] = {}
 r2_store: dict[tuple[int, int], int] = {}
+name_to_uid: dict[str, int] = {}
 
 STATE_FILE = "server_state.pk1"
 
@@ -75,6 +76,7 @@ class AnnounceRequest(BaseModel):
 class DeviceLocationResponse(BaseModel):
     ip: str
     port: int
+    uid: int
 
 class InitRequest(BaseModel):
     uid: int
@@ -85,6 +87,9 @@ class InitRequest(BaseModel):
 
 class SuperInitRequest(BaseModel):
     name: str = Query(...)
+
+class IDCheckResponse(BaseModel):
+    result: str
 
 class SuperInitResponse(BaseModel):
     UID: int
@@ -182,6 +187,18 @@ def announce(req: AnnounceRequest):
     device_locations[(req.uid, req.did)] = (req.ip, req.port)
     return {"result": "ok"}
 
+@app.get("/admin_device_location", response_model=DeviceLocationResponse)
+def admin_device_location(school_name: str = Query(...)) -> dict[str, str|int]:
+    uid: int = name_to_uid[school_name]
+    did: int = list(userDB[uid]["devices"])[0]
+    key = (uid, did)
+    if key not in device_locations:
+        raise HTTPException(status_code=404, detail="Device not found")
+    if uid != 1 and userDB[uid]["devices"][did]["DSK"] == None:
+        raise HTTPException(status_code=403, detail="Device has been revoked")
+    ip, port = device_locations[key]
+    return {"ip": ip, "port": port, "uid": uid}
+
 @app.get("/device_location", response_model=DeviceLocationResponse)
 def device_location(uid: int = Query(...), did: int = Query(...)) -> dict[str, str|int]:
     key = (uid, did)
@@ -190,7 +207,7 @@ def device_location(uid: int = Query(...), did: int = Query(...)) -> dict[str, s
     if uid != 1 and userDB[uid]["devices"][did]["DSK"] == None:
         raise HTTPException(status_code=403, detail="Device has been revoked")
     ip, port = device_locations[key]
-    return {"ip": ip, "port": port}
+    return {"ip": ip, "port": port, "uid": uid}
 
 @app.get("/config")
 def get_config():
@@ -208,6 +225,13 @@ def super_init(req: SuperInitRequest):
         }
     return {"UID": UID, "DID": DID}
 
+@app.get("/id_check", response_model=IDCheckResponse)
+def id_check(uid: int = Query(...)):
+    if uid in name_to_uid.values() :
+        return{"result": "invalid UID"}
+    else:
+        return{"result": "valid UID"}
+
 @app.post("/init")
 def init_device(req: InitRequest):
     if req.uid in userDB and req.did in userDB[req.uid]["devices"]:
@@ -220,6 +244,8 @@ def init_device(req: InitRequest):
             "studentData": {},
             "indexData": {},
         }
+
+    name_to_uid[req.name] = req.uid
 
     # generate device values
     constant = random.randint(1, 100000)
@@ -284,17 +310,6 @@ def revoke(req: RevokeRequest):
     if userDB[req.uid]["devices"][req.revoke_did]["DSK"] is None:
         raise HTTPException(status_code=409, detail="Target device already revoked")
 
-    # schoolCert = userDB[req.uid]["cert"]
-    # if schoolCert is None:
-    #     raise HTTPException(status_code=400, detail="School certificate not found for this user")
-
-    # msg_bytes = req.message_str.encode()
-    # sig_bytes = base64.b64decode(req.msgSignature_str.encode())
-
-    # try:
-    #     schoolCert.verify(sig_bytes, msg_bytes, hashes.SHA256())
-    # except InvalidSignature:
-    #     raise HTTPException(status_code=403, detail="Invalid signature from school")
     userDB[req.uid]["devices"][req.revoke_did]["DSK"] = None
     return {"result": "Revocation completed"}
 

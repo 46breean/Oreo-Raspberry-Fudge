@@ -41,7 +41,6 @@ def get_local_ip():
 def registration():
     uid: int
     did: int
-    admin_did: int
     dk: int
     admin_ip: str
     admin_port: int
@@ -49,18 +48,18 @@ def registration():
     while True:
         print("\nSign Up: Register new device")
 
-        uid = int(input("Enter your UID: "))
-        admin_did = int(input("Enter your administrator DID: "))
+        school_name = str(input("Enter your school name: "))
 
         try:
             loc = requests.get(
-                f"{SERVER}/device_location",
-                params={"uid": uid, "did": admin_did}
+                f"{SERVER}/admin_device_location",
+                params={"school_name": school_name}
             )
             loc.raise_for_status()
             admin_info = loc.json()
             admin_ip = admin_info["ip"]
             admin_port = admin_info["port"]
+            uid = admin_info["uid"]
         except requests.exceptions.HTTPError as e:
             print("Could not find admin device:", e.response.json()["detail"])
             sys.exit(1)
@@ -77,7 +76,7 @@ def registration():
                 format=serialization.PublicFormat.SubjectPublicKeyInfo,
             )
             deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
-            data = {"deviceMsg": "Register New Device", "deviceCert": deviceCert_str}
+            data = {"deviceMsg": "Register New Device", "deviceCert": deviceCert_str,}
             s.sendall(json.dumps(data).encode())
             print("Connected; awaiting response...")
             admin_reply = s.recv(4096).decode()
@@ -90,7 +89,7 @@ def registration():
                 deviceSignature = base64.b64decode(deviceSignature_str.encode())
                 print(f"\n[Administrator] Device registration for DID {did} completed.")
 
-        return uid, did, admin_did, dk, admin_ip, admin_port, devicePrivateKey, deviceCert, deviceSignature
+        return uid, did, dk, admin_ip, admin_port, devicePrivateKey, deviceCert, deviceSignature
 
 def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, deviceprivatekey: dsa.DSAPrivateKey, devicecert: dsa.DSAPublicKey, devicesignature: bytes):
     while True:
@@ -415,7 +414,7 @@ def runClient():
     #     print("Saved state loaded.")
     # else:
     #     print("Fresh state loaded.")
-    uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature = registration()
+    uid, did, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature = registration()
         # state["UID"] = uid
         # state["DID"] = did
         # state["adminDID"] = admindid
@@ -426,10 +425,10 @@ def runClient():
         # state["deviceCert"] = deviceCert
         # state["deviceSignature"] = deviceSignature
         # save_state(state)
-    return uid, did, admindid, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature
+    return uid, did, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature
 
 p:int = requests.get(f"{SERVER}/config").json()["p"]
 primeList:list[int] = primes.upto(104729) # pyright: ignore[reportUnknownMemberType]
 
-UID, DID, adminDID, DK, adminIP, adminPort, devicePrivateKey, deviceCert, deviceSignature = runClient()
+UID, DID, DK, adminIP, adminPort, devicePrivateKey, deviceCert, deviceSignature = runClient()
 fn_selection(UID, DID, DK, adminIP, adminPort, devicePrivateKey, deviceCert, deviceSignature)

@@ -277,8 +277,25 @@ def initialisation():
         name = str(input("Input username: "))
         otp = str(input("Input OTP for initialisation: "))
 
-        uid = random.randint(10**9, 10**10 - 1)
+        while True:
+
+            uid = random.randint(10**9, 10**10 - 1)
+
+            idcheck = requests.get(
+                f"{SERVER}/id_check",
+                params={"uid": uid}
+            )
+
+            idcheck = idcheck.json()
+
+            if idcheck == "invalid UID":
+                continue
+            else:
+                break
+        
         did = random.randint(10**9, 10**10 - 1)
+
+
         dk, unused, keyproduct = selfKeyDev()
 
         #School certificate
@@ -348,14 +365,7 @@ def revoke_device(uid: int, did: int):
     
     print(f"DIDs of registered, not yet revoked devices: {did_list}")
     revoke_did = int(input("Select DID to revoke: "))
-    # message_str = f"Revoke {revoke_did}"
-    # message_bytes = message_str.encode()
-    # msgSignature = schoolprivatekey.sign(message_bytes, hashes.SHA256())
-    # msgSignature_str = base64.b64encode(msgSignature).decode()
-    # revocation = requests.post(
-    #     f"{SERVER}/revoke",
-    #     json={"uid": uid, "did": did, "revoke_did": revoke_did, "message_str": message_str, "msgSignature_str": msgSignature_str}
-    # ).json()
+
     revocation = requests.post(
         f"{SERVER}/revoke",
         json={"uid": uid, "did": did, "revoke_did": revoke_did}
