@@ -124,6 +124,11 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
 
                 if deviceMsg == "Register New Device":
                     deviceName: str = data["deviceName"]
+
+                    if deviceName in devices.values():
+                        conn.sendall(b"Invalid name")
+                        continue
+
                     print(f"\n\nIncoming registration request from {deviceName}")
 
                     deviceCert_str: str = data["deviceCert"]
@@ -387,7 +392,7 @@ def revoke_device(uid: int, did: int):
             revoke_did = key
 
     if revoke_did == 0:
-        print("This device does not exist. Please try again.\nPress enter to revoke devices.")
+        print("This device does not exist. Please try again.")
         return
 
     revocation = requests.post(
