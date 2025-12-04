@@ -49,6 +49,7 @@ def registration():
         print("\nSign Up: Register new device")
 
         school_name = str(input("Enter your school name: "))
+        device_name = str(input("Enter your name: "))
 
         try:
             loc = requests.get(
@@ -76,7 +77,7 @@ def registration():
                 format=serialization.PublicFormat.SubjectPublicKeyInfo,
             )
             deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
-            data = {"deviceMsg": "Register New Device", "deviceCert": deviceCert_str,}
+            data = {"deviceMsg": "Register New Device", "deviceCert": deviceCert_str, "deviceName": device_name}
             s.sendall(json.dumps(data).encode())
             print("Connected; awaiting response...")
             admin_reply = s.recv(4096).decode()

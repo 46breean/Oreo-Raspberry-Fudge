@@ -9,6 +9,9 @@ import requests, random, math, hashlib, socket, sys, threading, json, base64, os
 SERVER = "http://172.22.13.14:8000"
 
 state: dict[str, int|list[int]|bytes|dsa.DSAPrivateKey|dsa.DSAPublicKey] = {}
+
+devices: dict[int, str] = {}
+
 cert_dict: dict[int, bytes] = {}
 certificate_revocationlist: list[bytes] = []
 
@@ -120,7 +123,8 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                 deviceMsg: str = data["deviceMsg"]
 
                 if deviceMsg == "Register New Device":
-                    print("\n\nIncoming registration request...")
+                    deviceName: str = data["deviceName"]
+                    print(f"\n\nIncoming registration request from {deviceName}")
 
                     deviceCert_str: str = data["deviceCert"]
                     tmp = tempfile.NamedTemporaryFile(delete=False)
@@ -154,10 +158,15 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     devicecert = cast(dsa.DSAPublicKey, deviceCert_publicKeyTypes)
                     deviceSignature = generateDeviceSignature(devicecert, schoolprivatekey)
                     deviceSignature_str = base64.b64encode(deviceSignature).decode()
+                    
+                    device_did: int = int(data[0])
 
-                    regData = {"DID": data[0], "DK": data[1], "deviceSignature_str": deviceSignature_str}
+                    regData = {"DID": device_did, "DK": data[1], "deviceSignature_str": deviceSignature_str}
+
+                    devices[device_did] = deviceName
+
                     conn.sendall(json.dumps(regData).encode())
-                    print(f"Device registration for DID {data[0]} completed.")
+                    print(f"Device registration for DID {device_did} completed.")
                     print("\nPress enter to revoke devices.")
                 
                 elif deviceMsg == "Encrypt Data":
@@ -358,19 +367,34 @@ def revoke_device(uid: int, did: int):
             params = {"uid": uid, "did": did}
         )
         revoke_list.raise_for_status()
-        did_list = revoke_list.json()["dids"]
+        did_list: list[int] = revoke_list.json()["dids"]
     except requests.exceptions.HTTPError as e:
         print ("Revocation failed:", e.response.json()["detail"])
         sys.exit(1)
+
+    revokeNames: list[str] = []
+
+    for d in did_list:
+        revokeNames.append(devices[d])
     
-    print(f"DIDs of registered, not yet revoked devices: {did_list}")
-    revoke_did = int(input("Select DID to revoke: "))
+    print(f"DIDs of registered, not yet revoked devices: {revokeNames}")
+    revoke_str = str(input("Select device to revoke: "))
+
+    revoke_did = 0
+
+    for key, value in devices.items():
+        if value == revoke_str:
+            revoke_did = key
+
+    if revoke_did == 0:
+        print("This device does not exist. Please try again.\nPress enter to revoke devices.")
+        return
 
     revocation = requests.post(
         f"{SERVER}/revoke",
         json={"uid": uid, "did": did, "revoke_did": revoke_did}
     ).json()
-    print(f"{revocation["result"]} for Device {revoke_did}.")
+    print(f"{revocation["result"]} for {revoke_str}.")
 
     deviceCert_bytes = cert_dict[did]
     certificate_revocationlist.append(deviceCert_bytes)
