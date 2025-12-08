@@ -2,7 +2,6 @@ import requests, random, math, hashlib, socket, sys, json, ast, pickle, os, base
 from primePy import primes # pyright: ignore[reportMissingTypeStubs]
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa
-from typing import Dict, Optional
 
 SERVER = "http://172.22.13.14:8000"
 
@@ -39,9 +38,9 @@ def get_local_ip():
         s.close()
     return ip
 
-# lamda(x) helpers and validator
+# lambda(x) helpers and validator
 
-P_MINUS_1_FACTORS: Dict[int,int] = {
+P_MINUS_1_FACTORS: dict[int,int] = {
     2: 3,
     257: 1,
     8677: 1,
@@ -50,8 +49,8 @@ P_MINUS_1_FACTORS: Dict[int,int] = {
 
 LAMBDA_THRESHOLD = 3749528034479
 
-def trial_factor(n: int, limit: int = 200000) -> Dict[int,int]:
-    factors: Dict[int,int] = {}
+def trial_factor(n: int, limit: int = 200000) -> dict[int,int]:
+    factors: dict[int,int] = {}
     while n % 2 == 0:
         factors[2] = factors.get(2, 0) + 1
         n //= 2
@@ -65,7 +64,7 @@ def trial_factor(n: int, limit: int = 200000) -> Dict[int,int]:
         factors[n] = factors.get(n, 0) + 1
     return factors
 
-def multiplicative_order_with_factors(x: int, p_val: int, factors: Dict[int,int]) -> int:
+def multiplicative_order_with_factors(x: int, p_val: int, factors: dict[int,int]) -> int:
     if x % p_val == 0:
         return 1
     ord_val = p_val - 1
@@ -82,19 +81,19 @@ def multiplicative_order_slow(x: int, p_val: int) -> int:
     facs = trial_factor(p_val - 1, limit=200000)
     return multiplicative_order_with_factors(x, p_val, facs)
 
-def lambda_of_x(x: int, p_val: int, known_factors: Optional[Dict[int,int]] = None) -> int:
+def lambda_of_x(x: int, p_val: int, known_factors: dict[int,int]|None = None) -> int:
     if known_factors and len(known_factors) > 0:
         return multiplicative_order_with_factors(x, p_val, known_factors)
     else:
         return multiplicative_order_slow(x, p_val)
 
 def validate_x_or_raise(x: int, p_val: int, threshold: int = LAMBDA_THRESHOLD,
-                        known_factors: Optional[Dict[int,int]] = None) -> None:
+                        known_factors: dict[int,int]|None = None) -> None:
     lam = lambda_of_x(x, p_val, known_factors)
     if lam < threshold:
         raise ValueError(f"Query value x={x} rejected: λ(x)={lam} < threshold {threshold}")
 
-# end of lamda(x) helpers
+# end of lambda(x) helpers
 
 def registration():
     uid: int
@@ -178,7 +177,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                     intIndex = str(index)
                     hashed_index = hash_str(intIndex) % p
 
-                    # validate lamda(x) for hashed_index
+                    # validate lambda(x) for hashed_index
                     try:
                         validate_x_or_raise(hashed_index, p, known_factors=P_MINUS_1_FACTORS)
                     except ValueError as e:
@@ -427,7 +426,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                         print(f"\nCurrently editing: index {index}.")
                         hashed_index = hash_str(index) % p
 
-                        # validate lamda(x) for hashed_index
+                        # validate lambda(x) for hashed_index
                         try:
                             validate_x_or_raise(hashed_index, p, known_factors=P_MINUS_1_FACTORS)
                         except ValueError as e:
