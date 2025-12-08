@@ -51,8 +51,6 @@ P_MINUS_1_FACTORS: Dict[int,int] = {
 LAMBDA_THRESHOLD = 3749528034479
 
 def trial_factor(n: int, limit: int = 200000) -> Dict[int,int]:
-    """Trial divide n by small primes up to 'limit'. Returns dict of found factors.
-    This is a simple fallback; replace with a precomputed factorisation for best performance."""
     factors: Dict[int,int] = {}
     while n % 2 == 0:
         factors[2] = factors.get(2, 0) + 1
@@ -68,7 +66,6 @@ def trial_factor(n: int, limit: int = 200000) -> Dict[int,int]:
     return factors
 
 def multiplicative_order_with_factors(x: int, p_val: int, factors: Dict[int,int]) -> int:
-    """Compute multiplicative order λ(x) modulo p using factorisation of p-1."""
     if x % p_val == 0:
         return 1
     ord_val = p_val - 1
@@ -82,12 +79,10 @@ def multiplicative_order_with_factors(x: int, p_val: int, factors: Dict[int,int]
     return ord_val
 
 def multiplicative_order_slow(x: int, p_val: int) -> int:
-    """Fallback: factor p-1 by trial division (may be slow) and compute order."""
     facs = trial_factor(p_val - 1, limit=200000)
     return multiplicative_order_with_factors(x, p_val, facs)
 
 def lambda_of_x(x: int, p_val: int, known_factors: Optional[Dict[int,int]] = None) -> int:
-    """Return λ(x). Use known_factors if provided (fast), otherwise fallback."""
     if known_factors and len(known_factors) > 0:
         return multiplicative_order_with_factors(x, p_val, known_factors)
     else:
@@ -95,7 +90,6 @@ def lambda_of_x(x: int, p_val: int, known_factors: Optional[Dict[int,int]] = Non
 
 def validate_x_or_raise(x: int, p_val: int, threshold: int = LAMBDA_THRESHOLD,
                         known_factors: Optional[Dict[int,int]] = None) -> None:
-    """Raise ValueError if λ(x) < threshold."""
     lam = lambda_of_x(x, p_val, known_factors)
     if lam < threshold:
         raise ValueError(f"Query value x={x} rejected: λ(x)={lam} < threshold {threshold}")
