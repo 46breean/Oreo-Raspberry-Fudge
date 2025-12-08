@@ -2,6 +2,7 @@ import requests, random, math, hashlib, socket, sys, json, ast, pickle, os, base
 from primePy import primes # pyright: ignore[reportMissingTypeStubs]
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa
+from typing import Dict, Optional
 
 SERVER = "http://172.22.13.14:8000"
 
@@ -37,6 +38,69 @@ def get_local_ip():
     finally:
         s.close()
     return ip
+
+# lamda(x) helpers and validator
+
+P_MINUS_1_FACTORS: Dict[int,int] = {
+    2: 3,
+    257: 1,
+    8677: 1,
+    1681411: 1
+}
+
+LAMBDA_THRESHOLD = 3749528034479
+
+def trial_factor(n: int, limit: int = 200000) -> Dict[int,int]:
+    """Trial divide n by small primes up to 'limit'. Returns dict of found factors.
+    This is a simple fallback; replace with a precomputed factorisation for best performance."""
+    factors: Dict[int,int] = {}
+    while n % 2 == 0:
+        factors[2] = factors.get(2, 0) + 1
+        n //= 2
+    f = 3
+    while f <= limit and f * f <= n:
+        while n % f == 0:
+            factors[f] = factors.get(f, 0) + 1
+            n //= f
+        f += 2
+    if n != 1:
+        factors[n] = factors.get(n, 0) + 1
+    return factors
+
+def multiplicative_order_with_factors(x: int, p_val: int, factors: Dict[int,int]) -> int:
+    """Compute multiplicative order λ(x) modulo p using factorisation of p-1."""
+    if x % p_val == 0:
+        return 1
+    ord_val = p_val - 1
+    for q, exp in list(factors.items()):
+        for _ in range(exp):
+            candidate = ord_val // q
+            if pow(x, candidate, p_val) == 1:
+                ord_val = candidate
+            else:
+                break
+    return ord_val
+
+def multiplicative_order_slow(x: int, p_val: int) -> int:
+    """Fallback: factor p-1 by trial division (may be slow) and compute order."""
+    facs = trial_factor(p_val - 1, limit=200000)
+    return multiplicative_order_with_factors(x, p_val, facs)
+
+def lambda_of_x(x: int, p_val: int, known_factors: Optional[Dict[int,int]] = None) -> int:
+    """Return λ(x). Use known_factors if provided (fast), otherwise fallback."""
+    if known_factors and len(known_factors) > 0:
+        return multiplicative_order_with_factors(x, p_val, known_factors)
+    else:
+        return multiplicative_order_slow(x, p_val)
+
+def validate_x_or_raise(x: int, p_val: int, threshold: int = LAMBDA_THRESHOLD,
+                        known_factors: Optional[Dict[int,int]] = None) -> None:
+    """Raise ValueError if λ(x) < threshold."""
+    lam = lambda_of_x(x, p_val, known_factors)
+    if lam < threshold:
+        raise ValueError(f"Query value x={x} rejected: λ(x)={lam} < threshold {threshold}")
+
+# end of lamda(x) helpers
 
 def registration():
     uid: int
@@ -119,6 +183,14 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 for index in indexes:
                     intIndex = str(index)
                     hashed_index = hash_str(intIndex) % p
+
+                    # validate lamda(x) for hashed_index
+                    try:
+                        validate_x_or_raise(hashed_index, p, known_factors=P_MINUS_1_FACTORS)
+                    except ValueError as e:
+                        print("Invalid query index:", e)
+                        print("Please choose a different query.")
+                        continue
 
                     # blinding
                     r1 = random_coprime(p - 1)
@@ -360,6 +432,15 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                         index = str(indexes[i])
                         print(f"\nCurrently editing: index {index}.")
                         hashed_index = hash_str(index) % p
+
+                        # validate lamda(x) for hashed_index
+                        try:
+                            validate_x_or_raise(hashed_index, p, known_factors=P_MINUS_1_FACTORS)
+                        except ValueError as e:
+                            print("Invalid index value:", e)
+                            print("Please choose a different index.")
+                            continue
+
                         r1 = random_coprime(p - 1)
 
                         blinded = pow(hashed_index, dk * r1, p)
@@ -396,7 +477,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                                 f"{SERVER}/edit/step3", 
                                 json={"uid": uid, "did": did, "unblinded1": unblinded1, "addOrRemove": addOrRemove, "dataIDs": dataIDs}
                             ).json()
-                            print(f"\nIndex edit, {resp3["result"]}.")
+                            print(f"\nIndex edit, {resp3['result']}.")
                         except requests.exceptions.HTTPError as e:
                             print("Step 3 failed:", e.response.json()["detail"])
                             input("Press Enter to continue...")

@@ -12,8 +12,8 @@ numberOfx = math.ceil((1-(1-confidence)**(1/numberOfTrials))*(p-1))
 print("Sample space size: " + str(numberOfx))
 
 #prime factorisation
-def factors(n):
-    result = []
+def factors(n: int):
+    result: list[int] = []
     i = 1
     while i * i <= n:
         if n % i == 0:
