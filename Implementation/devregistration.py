@@ -21,7 +21,7 @@ def keyDev(keyproduct:list[int]):
 
 def handle_registration(uid: int, did: int, keyproduct:list[int], addr:str, tmp_path:str):
     print(f"Incoming registration request from {addr}")
-    print("Type '1' to accept request, type anything else to reject request.")
+    print("Type '1' to register device, type anything else to reject registration.")
     regreq_ans = int(input("Would you like to register this device? "))
 
     if regreq_ans == 1:
