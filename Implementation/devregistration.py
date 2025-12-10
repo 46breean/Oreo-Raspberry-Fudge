@@ -19,8 +19,8 @@ def keyDev(keyproduct:list[int]):
             unused *= keyproduct[i]
     return base, unused
 
-def handle_registration(uid: int, did: int, keyproduct:list[int], addr:str, tmp_path:str):
-    print(f"Incoming registration request from {addr}")
+def handle_registration(uid: int, did: int, keyproduct:list[int], devicename:str, tmp_path:str):
+    print(f"Incoming registration request from {devicename}")
     print("Type '1' to register device, type anything else to reject registration.")
     regreq_ans = int(input("Would you like to register this device? "))
 
@@ -66,9 +66,9 @@ def handle_registration(uid: int, did: int, keyproduct:list[int], addr:str, tmp_
 
 
 if __name__ == "__main__":
-    uid, did, addr, keyproduct, tmp_path = sys.argv[1:]
+    uid, did, devicename, keyproduct, tmp_path = sys.argv[1:]
     uid = int(uid)
     did = int(did)
     keyproduct = ast.literal_eval(keyproduct)
 
-    handle_registration(uid, did, keyproduct, addr, tmp_path)
+    handle_registration(uid, did, keyproduct, devicename, tmp_path)

@@ -24,8 +24,8 @@ class UserDBEntry(TypedDict):
     cert: dsa.DSAPublicKey|None
     name: str
     devices: dict[int, UserDevice]
-    studentData: dict[int, str]
-    indexData: dict[int, list[int]]
+    studentData: dict[int, str] # data ID : student data
+    indexData: dict[int, list[int]] # encrypted index : list of dataIDs
 
 userDB: dict[int, UserDBEntry] = {} # uid, userDBEntry
 device_locations: dict[tuple[int, int], tuple[str, int]] = {}

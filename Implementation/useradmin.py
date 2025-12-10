@@ -117,7 +117,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
         ).json()
 
         while True:
-            conn, addr = s.accept()
+            conn, _ = s.accept()
             with conn:
                 data = json.loads(conn.recv(4096).decode())
                 deviceMsg: str = data["deviceMsg"]
@@ -140,7 +140,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         "start", "cmd", "/c",
                         sys.executable, "devregistration.py",
                         str(uid), str(did),
-                        str(addr),
+                        str(deviceName),
                         str(keyproduct), str(tmp_path)
                     ], shell=True)
 
