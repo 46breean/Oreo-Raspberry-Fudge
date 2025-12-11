@@ -158,10 +158,9 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
         print("1. Evaluate and Query")
         print("2. Edit Database")
         print("3. Exit")
-        choice = int(input("Select function: "))
-
         try:
-            
+            choice = int(input("Select function: "))
+                
             if choice == 1:
                 queryResult: dict[str, str] = {}
                 data: dict[str, str|int|dict[str, str]]
@@ -488,7 +487,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
 
             else:
                 print("Please select a valid function.")
-        except KeyError:
+        except ValueError:
             print("Please enter a valid input.")
 
 def runClient():
