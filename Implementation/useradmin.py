@@ -365,7 +365,7 @@ def initialisation():
 
         return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert
 
-def revoke_device(uid: int, did: int):
+def revoke_device(uid: int, did: int, schoolprivatekey: dsa.DSAPrivateKey):
     try:
         revoke_list = requests.get(
             f"{SERVER}/revoke_list",
@@ -394,11 +394,16 @@ def revoke_device(uid: int, did: int):
     if revoke_did == 0:
         print("This device does not exist. Please try again.")
         return
-
+    
+    message_str = f"Revoke {revoke_did}"
+    message_bytes = message_str.encode()
+    msgSignature = schoolprivatekey.sign(message_bytes, hashes.SHA256())
+    msgSignature_str = base64.b64encode(msgSignature).decode()
     revocation = requests.post(
         f"{SERVER}/revoke",
-        json={"uid": uid, "did": did, "revoke_did": revoke_did}
+        json={"uid": uid, "did": did, "revoke_did": revoke_did, "message_str": message_str, "msgSignature_str": msgSignature_str}
     ).json()
+    
     print(f"{revocation["result"]} for {revoke_str}.")
 
     deviceCert_bytes = cert_dict[did]
@@ -452,4 +457,4 @@ listener_thread.start()
 
 while True:
     input("\nPress enter to revoke devices.")
-    revoke_device(UID, DID)
+    revoke_device(UID, DID, schoolPrivateKey)

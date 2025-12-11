@@ -9,7 +9,8 @@ from pydantic import BaseModel
 from typing import TypedDict, cast
 from contextlib import asynccontextmanager
 from cryptography.hazmat.primitives.asymmetric import dsa
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.exceptions import InvalidSignature
 # from cryptography.exceptions import InvalidSignature
 
 P = 29996224275833  # prime modulus
@@ -107,8 +108,8 @@ class RevokeRequest(BaseModel):
     uid: int
     did: int
     revoke_did: int
-    # message_str: str
-    # msgSignature_str: str
+    message_str: str
+    msgSignature_str: str
 
 class RevokeResponse(BaseModel):
     result: str
@@ -305,6 +306,17 @@ def revoke(req: RevokeRequest):
         raise HTTPException(status_code=400, detail="Device not registered")
     if userDB[req.uid]["devices"][req.did]["DSK"] is None:
         raise HTTPException(status_code=403, detail="Current device revoked")
+    
+    schoolCert = userDB[req.uid]["cert"]
+    if schoolCert is None:
+        raise HTTPException(status_code=403, detail="School certificate not found.")
+    message_bytes = req.message_str.encode()
+    msgSignature_bytes = base64.b64decode(req.msgSignature_str.encode())
+    try:
+        schoolCert.verify(msgSignature_bytes, message_bytes, hashes.SHA256())
+    except InvalidSignature:
+        print("Signature is invalid. Revocation unauthorised.")
+        return
 
     if req.revoke_did not in userDB[req.uid]["devices"]:
         raise HTTPException(status_code=404, detail="Target device not found")
