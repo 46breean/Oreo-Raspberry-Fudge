@@ -215,13 +215,15 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                         resp2 = requests.post(
                             f"{SERVER}/eval/step2", 
                             json={"uid": uid, "did": did, "unblinded1": unblinded1}
-                        ).json()
-                        tempQueryResult = resp2["query_result"]  # dict[dataID:studentinfo] (encrypted)
+                        )
+                        resp2.raise_for_status()
                     except requests.exceptions.HTTPError as e:
                         print("Step 2 failed:", e.response.json()["detail"])
                         input("Press Enter to continue...")
-                        return
+                        continue
                     
+                    resp2 = resp2.json()
+                    tempQueryResult = resp2["query_result"]  # dict[dataID:studentinfo] (encrypted)
                     if queryType == 1 or queryType == 3:
                             queryResult = queryResult|tempQueryResult
                     elif queryType == 2:
@@ -230,34 +232,32 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                         else:
                             queryResult = {k:tempQueryResult[k] for k in queryResult if k in tempQueryResult}
 
-                message_str = "Decrypt Data"
-                message_bytes = message_str.encode()
-                msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
-                msgSignature_str = base64.b64encode(msgSignature).decode()
-                deviceCert_bytes = devicecert.public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                )
-                deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
-                deviceSignature_str = base64.b64encode(devicesignature).decode()
+                    message_str = "Decrypt Data"
+                    message_bytes = message_str.encode()
+                    msgSignature = deviceprivatekey.sign(message_bytes, hashes.SHA256())
+                    msgSignature_str = base64.b64encode(msgSignature).decode()
+                    deviceCert_bytes = devicecert.public_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                    )
+                    deviceCert_str = base64.b64encode(deviceCert_bytes).decode()
+                    deviceSignature_str = base64.b64encode(devicesignature).decode()
                 
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    print(f"\nConnecting to administrator device at {adminip}:{adminport} for student data decryption...")
-                    s.connect((adminip, adminport))
-                    data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
-                    s.sendall(json.dumps(data).encode())
-                    SData = s.recv(4096).decode()
-                    if SData == "REJECTED":
-                        print("[Administrator] Decryption Request Rejected, device has been revoked.")
-                        sys.exit(1)
-                    else:
-                        SData = json.loads(SData)
-                        print("[Administrator] Decryption Request Accepted.")
-                        StudentData:dict[int,str] = {}
-                        for DataID, Data in list(SData.items()):
-                            StudentData[int(DataID)] = Data
-            
-                print(f"\nStudent Data requested: \n{StudentData}")
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                        s.connect((adminip, adminport))
+                        data = {"deviceMsg": "Decrypt Data", "DID": did, "StudentData": queryResult, "message_str":message_str,"msgSignature_str": msgSignature_str, "deviceCert_str": deviceCert_str, "deviceSignature_str": deviceSignature_str}
+                        s.sendall(json.dumps(data).encode())
+                        SData = s.recv(4096).decode()
+                        if SData == "REJECTED":
+                            print("[Administrator] Decryption Request Rejected, device has been revoked.")
+                            sys.exit(1)
+                        else:
+                            SData = json.loads(SData)
+                            StudentData:dict[int,str] = {}
+                            for DataID, Data in list(SData.items()):
+                                StudentData[int(DataID)] = Data
+                
+                    print(f"\nStudent Data requested: \n{StudentData}")
 
 
             elif choice == 2:

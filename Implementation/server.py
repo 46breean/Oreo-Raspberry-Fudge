@@ -190,6 +190,8 @@ def announce(req: AnnounceRequest):
 
 @app.get("/admin_device_location", response_model=DeviceLocationResponse)
 def admin_device_location(school_name: str = Query(...)) -> dict[str, str|int]:
+    if school_name not in name_to_uid:
+        raise HTTPException(status_code=404, detail="School does not exist")
     uid: int = name_to_uid[school_name]
     did: int = list(userDB[uid]["devices"])[0]
     key = (uid, did)
