@@ -93,6 +93,7 @@ class InitRequest(BaseModel):
 
 class SuperInitRequest(BaseModel):
     name: str = Query(...)
+    servadminCert: str = Query(...)
 
 class IDCheckResponse(BaseModel):
     result: str
@@ -124,6 +125,8 @@ class RevokeListResponse(BaseModel):
 
 class SuperRevokeRequest(BaseModel):
     uid: int
+    message_str: str
+    msgSignature_str: str
 
 class SuperRevokeResponse(BaseModel):
     result: str
@@ -231,6 +234,18 @@ def super_init(req: SuperInitRequest):
             "studentData": {},
             "indexData": {},
         }
+    
+    # decode certificate
+    try:
+        cert_bytes = base64.b64decode(req.servadminCert.encode())
+        public_key = serialization.load_pem_public_key(cert_bytes)
+        serveradminCert = cast(dsa.DSAPublicKey, public_key)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid school certificate")
+
+    # store user info
+    userDB[1]["cert"] = serveradminCert
+
     return {"UID": UID, "DID": DID}
 
 @app.get("/id_check", response_model=IDCheckResponse)
@@ -335,6 +350,17 @@ def revoke(req: RevokeRequest):
 
 @app.post("/super_revoke", response_model=SuperRevokeResponse)
 def super_revoke(req: SuperRevokeRequest):
+    serveradminCert = userDB[1]["cert"]
+    if serveradminCert is None:
+        raise HTTPException(status_code=403, detail="School certificate not found.")
+    message_bytes = req.message_str.encode()
+    msgSignature_bytes = base64.b64decode(req.msgSignature_str.encode())
+    try:
+        serveradminCert.verify(msgSignature_bytes, message_bytes, hashes.SHA256())
+    except InvalidSignature:
+        print("Signature is invalid. Revocation unauthorised.")
+        return
+
     try:
         userDB[req.uid] = UserDBEntry(
             cert=None,

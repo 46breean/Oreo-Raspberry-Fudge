@@ -37,20 +37,32 @@ def get_local_ip() -> str:
     finally:
         s.close()
 
-def revoke_user():
+def revoke_user(serveradminprivatekey: dsa.DSAPrivateKey):
     names = [name for (name), uid in unrevoked_uids.items() if uid is not None]
     print("\nList of unrevoked users:")
     print(names)
     username = input("Enter user to be revoked: ")
 
-    revoke_uid = unrevoked_uids[username]
+    try:
+        revoke_uid = unrevoked_uids[username]
+    except KeyError:
+        print("User does not exist or has been revoked.")
+        return
 
     if revoke_uid is None:
         print("User has been revoked.")
         return
+    
+    message_str = f"Revoke {revoke_uid}"
+    message_bytes = message_str.encode()
+    msgSignature = serveradminprivatekey.sign(message_bytes, hashes.SHA256())
+    msgSignature_str = base64.b64encode(msgSignature).decode()
 
-    revoke = requests.post(f"{SERVER}/super_revoke", json={"uid": revoke_uid}).json()
+    revoke = requests.post(
+        f"{SERVER}/super_revoke", json={"uid": revoke_uid, "message_str": message_str, "msgSignature_str": msgSignature_str}
+    ).json()
     print(revoke.get("result", "No response"))
+
     school_certs[revoke_uid] = None
     unrevoked_uids[username] = None
 
@@ -156,14 +168,21 @@ def user_listener(uid: int, did: int, masterEncKey: bytes):
             conn, _ = s.accept()
             threading.Thread(target=handle_user_connection, args=(conn, masterEncKey), daemon=True).start()
 
-def init_reg() -> tuple[int, int, bytes]:
-    init = requests.post(f"{SERVER}/super_init", json={"name": "serverAdmin"}).json()
+def init_reg(serveradmincert_str: str) -> tuple[int, int, bytes]:
+    init = requests.post(f"{SERVER}/super_init", json={"name": "serverAdmin", "servadminCert": serveradmincert_str}).json()
     uid, did = init["UID"], init["DID"]
     masterenckey = masterEncKeyDev()
     print(f"Server Administrator initialised with UID {uid}, DID {did}")
     return uid, did, masterenckey
 
 def runServerAdmin():
+        serveradminprivatekey = dsa.generate_private_key(key_size=2048)
+        serveradmincert = serveradminprivatekey.public_key()
+        serveradmincert_bytes = serveradmincert.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        serveradmincert_str = base64.b64encode(serveradmincert_bytes).decode()
     # start_state = load_state()
     # if start_state:
     #     masterenckey = start_state["masterEncKey"]
@@ -171,15 +190,15 @@ def runServerAdmin():
     #     did = start_state["DID"]
     #     print("Saved state loaded.")
     # else:
-        uid, did, masterenckey = init_reg()
+        uid, did, masterenckey = init_reg(serveradmincert_str)
         # state["masterEncKey"] = masterenckey
         # state["UID"] = uid
         # state["DID"] = did
         # save_state(state)
-        return uid, did, masterenckey
+        return uid, did, masterenckey, serveradminprivatekey
 
 # ----------------- MAIN -----------------
-UID, DID, masterEncKey = runServerAdmin()
+UID, DID, masterEncKey, serveradminPrivateKey = runServerAdmin()
 
 # Start listener thread once
 listener_thread = threading.Thread(target=user_listener, args=(UID, DID, masterEncKey), daemon=True)
@@ -191,20 +210,20 @@ while True:
     print("2. Revoke user.")
     choice = input("Select function: ")
 
-    try:
-        choice = int(choice)
-        if choice == 1:
-            username = str(input("\nEnter new username: "))
-            if username in active_otps.keys():
-                print("Username taken. Please choose another username.")
-                continue
-            otp = random.randint(10**7, 10**8 - 1)
-            active_otps[username] = otp
-            print(f"\nInitialising new user. \n Username: {username} \n OTP: {otp}")
-        elif choice == 2:
-            revoke_user()
-        else:
-            print("Please select a valid function.")
+    # try:
+    choice = int(choice)
+    if choice == 1:
+        username = str(input("\nEnter new username: "))
+        if username in active_otps.keys():
+            print("Username taken. Please choose another username.")
+            continue
+        otp = random.randint(10**7, 10**8 - 1)
+        active_otps[username] = otp
+        print(f"\nInitialising new user. \n Username: {username} \n OTP: {otp}")
+    elif choice == 2:
+        revoke_user(serveradminPrivateKey)
+    else:
+        print("Please select a valid function.")
 
-    except ValueError:
-        print("Invalid input")
+    # except ValueError:
+    #     print("Invalid input")
