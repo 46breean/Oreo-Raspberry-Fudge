@@ -4,6 +4,7 @@ import uvicorn
 import pickle
 import os
 import base64
+import hashlib
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import TypedDict, cast
@@ -11,7 +12,6 @@ from contextlib import asynccontextmanager
 from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.exceptions import InvalidSignature
-# from cryptography.exceptions import InvalidSignature
 
 P = 29996224275833  # prime modulus
 
@@ -59,6 +59,11 @@ def load_state(filename: str = STATE_FILE) -> None:
         userDB = state.get("userDB", {})
         device_locations = state.get("device_locations", {})
     print("[STATE] Server state loaded.")
+
+def hash_int(x: int):
+    m = hashlib.sha256()
+    m.update(str(x).encode())
+    return int(m.hexdigest(), 16)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -364,6 +369,7 @@ def eval_step2(req: EvalStep2Request):
     r2 = r2_store.pop(key)
     r2_inv = pow(r2, -1, P - 1)
     final_value = pow(req.unblinded1, r2_inv, P)
+    final_value = hash_int(final_value)
 
     user_index = userDB[req.uid]["indexData"]
     user_student = userDB[req.uid]["studentData"]
@@ -467,6 +473,8 @@ def edit_step3(req: EditStep3Request):
     r2 = r2_store.pop(key)
     r2_inv = pow(r2, -1, P - 1)
     final_value = pow(req.unblinded1, r2_inv, P)
+
+    final_value = hash_int(final_value)
 
     user_index = userDB[req.uid]["indexData"]
     int_ids = [int(id_str) for id_str in req.dataIDs]

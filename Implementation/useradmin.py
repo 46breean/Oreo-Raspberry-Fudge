@@ -172,7 +172,10 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
 
                     conn.sendall(json.dumps(regData).encode())
                     print(f"Device registration for DID {device_did} completed.")
-                    print("\nPress enter to revoke devices.")
+                    print("\nUser Administrator Menu:")
+                    print("1. Revoke device.")
+                    print("2. Request for school encryption key.")
+                    print("Select function: ")
                 
                 elif deviceMsg == "Encrypt Data":
                     # retrieving DID and SData
@@ -190,7 +193,10 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
 
                     if deviceCert_bytes in certificate_revocationlist:
                         print("Device has been revoked. Encryption unauthorised.")
-                        print("\nPress enter to revoke devices.")
+                        print("\nUser Administrator Menu:")
+                        print("1. Revoke device.")
+                        print("2. Request for school encryption key.")
+                        print("Select function: ")
                         conn.sendall(b"REJECTED")
                         continue                        
 
@@ -202,7 +208,10 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         schoolcert.verify(deviceSignature_bytes, deviceCert_bytes, hashes.SHA256())
                     except InvalidSignature:
                         print("Device certificate is invalid. Encryption unauthorised.")
-                        print("\nPress enter to revoke devices.")
+                        print("\nUser Administrator Menu:")
+                        print("1. Revoke device.")
+                        print("2. Request for school encryption key.")
+                        print("Select function: ")
                         conn.sendall(b"REJECTED")
                         continue                        
                     
@@ -220,7 +229,10 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     for DataID, Data in plaintextdata.items():
                         ciphertextdata[DataID] = encryptData(Data, schoolenckey)
                     print(f"\n[Device {device_did}] Encryption successful.")
-                    print ("\nPress enter to revoke devices.")
+                    print("\nUser Administrator Menu:")
+                    print("1. Revoke device.")
+                    print("2. Request for school encryption key.")
+                    print("Select function: ")
 
                     conn.sendall(json.dumps(ciphertextdata).encode())
                 
@@ -241,7 +253,10 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     if deviceCert_bytes in certificate_revocationlist:
                         conn.sendall(b"REJECTED")
                         print("Device certificate is invalid. Decryption unauthorised.")
-                        print("\nPress enter to revoke devices.")
+                        print("\nUser Administrator Menu:")
+                        print("1. Revoke device.")
+                        print("2. Request for school encryption key.")
+                        print("Select function: ")
                         continue
 
                     deviceCert_publicKeyTypes = serialization.load_pem_public_key(deviceCert_bytes)
@@ -252,7 +267,10 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         schoolcert.verify(deviceSignature_bytes, deviceCert_bytes, hashes.SHA256())
                     except InvalidSignature:
                         print("Device certificate is invalid. Decryption unauthorised.")
-                        print("\nPress enter to revoke devices.")
+                        print("\nUser Administrator Menu:")
+                        print("1. Revoke device.")
+                        print("2. Request for school encryption key.")
+                        print("Select function: ")
                         conn.sendall(b"REJECTED")
                         continue  
                     
@@ -263,7 +281,10 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         deviceCert_DSAPublicKey.verify(signature_bytes, message_bytes, hashes.SHA256())
                     except InvalidSignature:
                         conn.sendall(b"REJECTED")
-                        print("\nPress enter to revoke devices.")
+                        print("\nUser Administrator Menu:")
+                        print("1. Revoke device.")
+                        print("2. Request for school encryption key.")
+                        print("Select function: ")
                         continue
 
                     #decrypting data
@@ -272,7 +293,10 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                         plaintextData[DataID] = decryptData(Data, schoolenckey)
 
                     print(f"\n[Device {device_did}] Decryption successful")
-                    print("\nPress enter to revoke devices.")
+                    print("\nUser Administrator Menu:")
+                    print("1. Revoke device.")
+                    print("2. Request for school encryption key.")
+                    print("Select function: ")
                     
                     conn.sendall(json.dumps(plaintextData).encode())
                 
@@ -337,7 +361,7 @@ def initialisation():
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print(f"\nConnecting to server administrator at {referral_ip}:{referral_port} to obtain school encryption key...")
             s.connect((referral_ip, referral_port))
-            data = json.dumps({"Username": name, "OTP": otp, "deviceMsg": "Obtain school encryption key", "UID": uid, "DID":did}).encode()
+            data = json.dumps({"Username": name, "OTP": otp, "schoolCert": schoolcert_str, "deviceMsg": "Initialisation request", "UID": uid, "DID":did}).encode()
             s.sendall(data)
             print("Connected, awaiting response...")
 
@@ -363,7 +387,8 @@ def initialisation():
 
         print(f"\nUser Administrator of {name} initialised with UID {uid}, DID {did}, school encryption key.")
 
-        return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert
+
+        return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert, referral_ip, referral_port, name
 
 def revoke_device(uid: int, did: int, schoolprivatekey: dsa.DSAPrivateKey):
     try:
@@ -436,7 +461,7 @@ def runUserAdmin():
     #     print("Saved state loaded.")
     # else:
     #     print("Fresh state loaded.")
-        uid, did, dk, keyproduct, schoolenckey,schoolprivatekey, schoolcert = initialisation()
+        uid, did, dk, keyproduct, schoolenckey,schoolprivatekey, schoolcert, referral_IP, referral_PORT, name = initialisation()
         # state["UID"] = uid
         # state["DID"] = did
         # state["DK"] = dk
@@ -445,9 +470,9 @@ def runUserAdmin():
         # state["schoolPrivateKey"] = schoolprivatekey
         # state["schoolCert"] = schoolcert
         # save_state(state)
-        return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert
+        return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert, referral_IP, referral_PORT, name
 
-UID, DID, DK, keyProduct, schoolEncKey, schoolPrivateKey, schoolCert = runUserAdmin()
+UID, DID, DK, keyProduct, schoolEncKey, schoolPrivateKey, schoolCert, referral_IP, referral_PORT, name = runUserAdmin()
 
 #start listener
 stop_event = threading.Event()
@@ -456,5 +481,44 @@ listener_thread = threading.Thread(target=inbound_socket, args=(UID, DID, keyPro
 listener_thread.start()
 
 while True:
-    input("\nPress enter to revoke devices.")
-    revoke_device(UID, DID, schoolPrivateKey)
+    print("\nUser Administrator Menu:")
+    print("1. Revoke device.")
+    print("2. Request for school encryption key.")
+    choice = input("Select function: ")
+
+    try:
+        choice = int(choice)
+        if choice == 1:
+            revoke_device(UID, DID, schoolPrivateKey)
+        elif choice == 2:
+            message_str = f"Obtain school encryption key request"
+            message_bytes = message_str.encode()
+            msgSignature = schoolPrivateKey.sign(message_bytes, hashes.SHA256())
+            msgSignature_str = base64.b64encode(msgSignature).decode()
+        
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+
+                print(f"\nConnecting to server administrator at {referral_IP}:{referral_PORT} to obtain school encryption key...")
+                s.connect((referral_IP, referral_PORT))
+                data = json.dumps({"Username": name, "deviceMsg": "Obtain school encryption key", "UID": UID, "DID":DID, "message_str": message_str, "msgSignature_str": msgSignature_str}).encode()
+                s.sendall(data)
+                print("Connected, awaiting response...")
+
+                raw = s.recv(4096)
+                if not raw:
+                    print("Server administrator closed connection unexpectedly")
+                    continue
+
+                response = json.loads(raw.decode())
+                if response == "REJECTED":
+                    print("\nRequest to obtain school encryption key rejected.")
+                    continue
+                else:
+                    schoolenckey_int = int(response)
+                    schoolEncKey = schoolenckey_int.to_bytes(32, "big")
+                    print("\nRequest accepted. School key regenerated.")
+        else:
+            print("Please select a valid function.")
+
+    except ValueError:
+        print("Invalid input")

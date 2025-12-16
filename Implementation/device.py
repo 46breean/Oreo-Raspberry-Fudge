@@ -469,7 +469,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                                     f"{SERVER}/edit/step3", 
                                     json={"uid": uid, "did": did, "unblinded1": unblinded1, "addOrRemove": addOrRemove, "dataIDs": dataIDs}
                                 ).json()
-                                print(f"\nIndex edit, {resp3['result']}.")
+                                print(f"\nIndex edit {resp3['result']}.")
                             except requests.exceptions.HTTPError as e:
                                 print("Step 3 failed:", e.response.json()["detail"])
                                 input("Press Enter to continue...")

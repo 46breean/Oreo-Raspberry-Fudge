@@ -1,13 +1,16 @@
-import socket, json, requests, os, pickle, random, threading
+import socket, json, requests, os, pickle, random, threading, base64, hashlib
+from typing import cast
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
-import hashlib
+from cryptography.hazmat.primitives.asymmetric import dsa
+from cryptography.exceptions import InvalidSignature
 
 SERVER = "http://172.22.13.14:8000"
 state: dict[str, bytes|int] = {}
 active_otps: dict[str, int|None] = {}
-unrevoked_uids: dict[str, int|None] = {}
+unrevoked_uids: dict[str, int|None] = {} # name : uid
+school_certs: dict[int, dsa.DSAPublicKey|None] = {} # uid : cert
 
 def save_state(state: dict[str, bytes|int], filename:str='serveradmin_state.pk1'):
     with open(filename, "wb") as f:
@@ -39,9 +42,16 @@ def revoke_user():
     print("\nList of unrevoked users:")
     print(names)
     username = input("Enter user to be revoked: ")
+
     revoke_uid = unrevoked_uids[username]
+
+    if revoke_uid is None:
+        print("User has been revoked.")
+        return
+
     revoke = requests.post(f"{SERVER}/super_revoke", json={"uid": revoke_uid}).json()
     print(revoke.get("result", "No response"))
+    school_certs[revoke_uid] = None
     unrevoked_uids[username] = None
 
 def handle_user_connection(conn: socket.socket, masterEncKey: bytes):
@@ -49,12 +59,12 @@ def handle_user_connection(conn: socket.socket, masterEncKey: bytes):
         try:
             data = json.loads(conn.recv(4096).decode())
         except json.JSONDecodeError:
-            print("Received invalid JSON from client, rejecting...")
+            print("Received invalid JSON from user, rejecting...")
             conn.sendall(json.dumps("REJECTED").encode())
             return
 
         try:
-            if "Username" in data:
+            if data["deviceMsg"] == "Initialisation request":
                 username = str(data["Username"])
                 userotp = int(data["OTP"])
                 print(f"\n\nReceived initialisation request from {username}.")
@@ -86,11 +96,49 @@ def handle_user_connection(conn: socket.socket, masterEncKey: bytes):
 
                     print(f"[{uid} {username}] Initialised successfully.")
                     unrevoked_uids[username] = uid
+                    
+                    schoolcert_str: str = data["schoolCert"]
+                    schoolcert_bytes = base64.b64decode(schoolcert_str.encode())
+                    schoolcert_publicKeyTypes = serialization.load_pem_public_key(schoolcert_bytes)
+                    schoolcert = cast(dsa.DSAPublicKey, schoolcert_publicKeyTypes)
+                    school_certs[uid] = schoolcert
 
                     print("\nServer Administrator Menu:")
                     print("1. Initialise new user.")
                     print("2. Revoke user.")
                     print("Select function: ")
+            
+            elif data["deviceMsg"] == "Obtain school encryption key":
+                name = data["Username"]
+
+                print(f"\n\nRecevied request to obtain school encryption key from {name}.")
+                uid = data["UID"]
+                did = data["DID"]
+                schoolCert = school_certs[uid]
+
+                if schoolCert is None:
+                    print("School has been revoked.")
+                    conn.sendall(json.dumps("REJECTED").encode())
+                    return
+                
+                message_bytes = data["message_str"].encode()
+                msgSignature_bytes = base64.b64decode(data["msgSignature_str"].encode())
+
+                try:
+                    schoolCert.verify(msgSignature_bytes, message_bytes, hashes.SHA256())
+                except InvalidSignature:
+                    print("Signature is invalid. Request unauthorised.")
+                    conn.sendall(json.dumps("REJECTED").encode())
+                    return
+                
+                schoolEncKey_bytes = schoolEncKeyDev(masterEncKey, uid, did)
+                schoolEncKey = int.from_bytes(schoolEncKey_bytes, "big")
+                conn.sendall(json.dumps(schoolEncKey).encode())
+
+                print("\nServer Administrator Menu:")
+                print("1. Initialise new user.")
+                print("2. Revoke user.")
+                print("Select function: ")
 
         except Exception as e:
             print(f"Error handling connnection: {e}")
