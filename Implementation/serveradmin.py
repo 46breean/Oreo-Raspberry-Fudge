@@ -210,20 +210,19 @@ while True:
     print("2. Revoke user.")
     choice = input("Select function: ")
 
-    # try:
-    choice = int(choice)
-    if choice == 1:
-        username = str(input("\nEnter new username: "))
-        if username in active_otps.keys():
-            print("Username taken. Please choose another username.")
-            continue
-        otp = random.randint(10**7, 10**8 - 1)
-        active_otps[username] = otp
-        print(f"\nInitialising new user. \n Username: {username} \n OTP: {otp}")
-    elif choice == 2:
-        revoke_user(serveradminPrivateKey)
-    else:
-        print("Please select a valid function.")
-
-    # except ValueError:
-    #     print("Invalid input")
+    try:
+        choice = int(choice)
+        if choice == 1:
+            username = str(input("\nEnter new username: "))
+            if username in active_otps.keys():
+                print("Username taken. Please choose another username.")
+                continue
+            otp = random.randint(10**7, 10**8 - 1)
+            active_otps[username] = otp
+            print(f"\nInitialising new user. \n Username: {username} \n OTP: {otp}")
+        elif choice == 2:
+            revoke_user(serveradminPrivateKey)
+        else:
+            print("Please select a valid function.")
+    except ValueError:
+        print("Invalid input")
