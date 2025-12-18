@@ -124,8 +124,10 @@ def handle_user_connection(conn: socket.socket, masterEncKey: bytes):
                 name = data["Username"]
 
                 print(f"\n\nRecevied request to obtain school encryption key from {name}.")
-                uid = data["UID"]
-                did = data["DID"]
+                uid: int = data["UID"]
+                did: int = data["DID"]
+                message_str: str = data["message_str"]
+                msgSignature_str: str = data["msgSignature_str"]
                 schoolCert = school_certs[uid]
 
                 if schoolCert is None:
@@ -133,8 +135,8 @@ def handle_user_connection(conn: socket.socket, masterEncKey: bytes):
                     conn.sendall(json.dumps("REJECTED").encode())
                     return
                 
-                message_bytes = data["message_str"].encode()
-                msgSignature_bytes = base64.b64decode(data["msgSignature_str"].encode())
+                message_bytes = message_str.encode()
+                msgSignature_bytes = base64.b64decode(msgSignature_str.encode())
 
                 try:
                     schoolCert.verify(msgSignature_bytes, message_bytes, hashes.SHA256())
