@@ -8,7 +8,6 @@ import hashlib
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import TypedDict, cast
-from contextlib import asynccontextmanager
 from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.exceptions import InvalidSignature
@@ -41,35 +40,10 @@ def random_coprime(p_minus_1: int) -> int:
         if math.gcd(r, p_minus_1) == 1:
             return r
 
-def save_state(filename: str = STATE_FILE) -> None:
-    with open(filename, "wb") as f:
-        pickle.dump({
-            "userDB": userDB,
-            "device_locations": device_locations
-        }, f)
-    print("[STATE] Server state saved.")
-
-def load_state(filename: str = STATE_FILE) -> None:
-    if not os.path.exists(filename):
-        print("[STATE] No saved state found, starting fresh.")
-        return
-    with open(filename, "rb") as f:
-        state = pickle.load(f)
-        global userDB, device_locations
-        userDB = state.get("userDB", {})
-        device_locations = state.get("device_locations", {})
-    print("[STATE] Server state loaded.")
-
 def hash_int(x: int):
     m = hashlib.sha256()
     m.update(str(x).encode())
     return int(m.hexdigest(), 16)
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    load_state()
-    yield
-    save_state()
 
 app = FastAPI(title="Encrypted Indexing Server", version="1.0.0")  # , lifespan=lifespan
 
@@ -520,8 +494,6 @@ def edit_step3(req: EditStep3Request):
                 user_index[final_value].remove(id_)
 
     return {"result": "successful"}
-
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

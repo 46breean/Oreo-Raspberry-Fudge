@@ -5,18 +5,6 @@ from cryptography.hazmat.primitives.asymmetric import dsa
 
 SERVER = "http://172.22.13.14:8000"
 
-state: dict[str, int|str|dsa.DSAPrivateKey|dsa.DSAPublicKey|bytes] = {}
-
-def save_state(state: dict[str, int|str|dsa.DSAPrivateKey|dsa.DSAPublicKey|bytes], filename:str ='client_state.pk1'):
-    with open(filename, "wb") as f:
-        pickle.dump(state, f)
-
-def load_state(filename:str = 'client_state.pk1'):
-    if not os.path.exists(filename):
-        return None
-    with open(filename, "rb") as f:
-        return pickle.load(f)
-
 def hash_str(x: str):
     m = hashlib.sha256()
     m.update(str(x).encode())
@@ -170,9 +158,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                 print("2. AND query: only results that satisfy all given conditions")
                 print("3. OR query: results that satisfy at least one given condition (i.e. multiple discrete single queries)")
                 queryType = int(input("Select your query type (1/2/3): "))
-
                 indexes = [index.strip() for index in input("Enter student data quer(ies) separated by commas: ").split(",")]
-                
                 StudentData_req: dict[int,str] = {}
                 
                 for index in indexes:
@@ -495,31 +481,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
             print("Please enter a valid input.")
 
 def runClient():
-    # start_state = load_state()
-    # if start_state:
-    #     uid = start_state["UID"]
-    #     did = start_state["DID"]
-    #     admindid = start_state["adminDID"]
-    #     dk = start_state["DK"]
-    #     adminip = start_state["adminIP"]
-    #     adminport = start_state["adminPort"]
-    #     deviceprivatekey = start_state["devicePrivateKey"]
-    #     deviceCert = start_state["deviceCert"]
-    #     deviceSignature = start_state["deviceSignature"]
-    #     print("Saved state loaded.")
-    # else:
-    #     print("Fresh state loaded.")
     uid, did, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature = registration()
-        # state["UID"] = uid
-        # state["DID"] = did
-        # state["adminDID"] = admindid
-        # state["DK"] = dk
-        # state["adminIP"] = adminip
-        # state["adminPort"] = adminport
-        # state["devicePrivateKey"] = deviceprivatekey
-        # state["deviceCert"] = deviceCert
-        # state["deviceSignature"] = deviceSignature
-        # save_state(state)
     return uid, did, dk, adminip, adminport, deviceprivatekey, deviceCert, deviceSignature
 
 p:int = requests.get(f"{SERVER}/config").json()["p"]

@@ -4,26 +4,13 @@ from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
 from cryptography.exceptions import InvalidSignature
 from typing import cast
-import requests, random, math, hashlib, socket, sys, threading, json, base64, os, pickle, subprocess, tempfile, time
+import requests, random, math, hashlib, socket, sys, threading, json, base64, os, subprocess, tempfile, time
 
 SERVER = "http://172.22.13.14:8000"
 
-state: dict[str, int|list[int]|bytes|dsa.DSAPrivateKey|dsa.DSAPublicKey] = {}
-
 devices: dict[int, str] = {}
-
 cert_dict: dict[int, bytes] = {}
 certificate_revocationlist: list[bytes] = []
-
-def save_state(state: dict[str, int|list[int]|bytes|dsa.DSAPrivateKey|dsa.DSAPublicKey], filename:str ='useradmin_state.pk1'):
-    with open(filename, "wb") as f:
-        pickle.dump(state, f)
-
-def load_state(filename:str = 'useradmin_state.pk1'):
-    if not os.path.exists(filename):
-        return None
-    with open(filename, "rb") as f:
-        return pickle.load(f)
 
 def hash_int(x: int) -> int:
     m = hashlib.sha256()
@@ -446,31 +433,8 @@ p = requests.get(f"{SERVER}/config").json()["p"]
 primeList = primes.upto(104729) # pyright: ignore[reportUnknownMemberType]
 
 def runUserAdmin():
-    # start_state = load_state()
-    # if start_state:
-    #     uid = start_state["UID"]
-    #     did = start_state["DID"]
-    #     dk = start_state["DK"]
-    #     keyproduct = start_state["keyProduct"]
-    #     deviceprivatekey = start_state["devicePrivateKey"]
-    #     devicecert = start_state["deviceCert"]
-    #     devicesignature = start_state["deviceSignature"]
-    #     schoolenckey = start_state["schoolEncKey"]
-    #     schoolprivatekey = start_state["schoolPrivateKey"]
-    #     schoolcert = start_state["schoolCert"]
-    #     print("Saved state loaded.")
-    # else:
-    #     print("Fresh state loaded.")
-        uid, did, dk, keyproduct, schoolenckey,schoolprivatekey, schoolcert, referral_IP, referral_PORT, name = initialisation()
-        # state["UID"] = uid
-        # state["DID"] = did
-        # state["DK"] = dk
-        # state["keyProduct"] = keyproduct
-        # state["schoolEncKey"] = schoolenckey
-        # state["schoolPrivateKey"] = schoolprivatekey
-        # state["schoolCert"] = schoolcert
-        # save_state(state)
-        return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert, referral_IP, referral_PORT, name
+    uid, did, dk, keyproduct, schoolenckey,schoolprivatekey, schoolcert, referral_IP, referral_PORT, name = initialisation()
+    return uid, did, dk, keyproduct, schoolenckey, schoolprivatekey, schoolcert, referral_IP, referral_PORT, name
 
 UID, DID, DK, keyProduct, schoolEncKey, schoolPrivateKey, schoolCert, referral_IP, referral_PORT, name = runUserAdmin()
 

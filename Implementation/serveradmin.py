@@ -1,4 +1,4 @@
-import socket, json, requests, os, pickle, random, threading, base64, hashlib
+import socket, json, requests, random, threading, base64, hashlib
 from typing import cast
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes, serialization
@@ -7,20 +7,9 @@ from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.exceptions import InvalidSignature
 
 SERVER = "http://172.22.13.14:8000"
-state: dict[str, bytes|int] = {}
 active_otps: dict[str, int|None] = {}
 unrevoked_uids: dict[str, int|None] = {} # name : uid
 school_certs: dict[int, dsa.DSAPublicKey|None] = {} # uid : cert
-
-def save_state(state: dict[str, bytes|int], filename:str='serveradmin_state.pk1'):
-    with open(filename, "wb") as f:
-        pickle.dump(state, f)
-
-def load_state(filename:str='serveradmin_state.pk1'):
-    if not os.path.exists(filename):
-        return None
-    with open(filename, "rb") as f:
-        return pickle.load(f)
 
 def masterEncKeyDev() -> bytes:
     return AESGCMSIV.generate_key(bit_length=256)
@@ -170,7 +159,7 @@ def user_listener(uid: int, did: int, masterEncKey: bytes):
             conn, _ = s.accept()
             threading.Thread(target=handle_user_connection, args=(conn, masterEncKey), daemon=True).start()
 
-def init_reg(serveradmincert_str: str) -> tuple[int, int, bytes]:
+def initialisation(serveradmincert_str: str) -> tuple[int, int, bytes]:
     init = requests.post(f"{SERVER}/super_init", json={"name": "serverAdmin", "servadminCert": serveradmincert_str}).json()
     uid, did = init["UID"], init["DID"]
     masterenckey = masterEncKeyDev()
@@ -178,26 +167,15 @@ def init_reg(serveradmincert_str: str) -> tuple[int, int, bytes]:
     return uid, did, masterenckey
 
 def runServerAdmin():
-        serveradminprivatekey = dsa.generate_private_key(key_size=2048)
-        serveradmincert = serveradminprivatekey.public_key()
-        serveradmincert_bytes = serveradmincert.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-        serveradmincert_str = base64.b64encode(serveradmincert_bytes).decode()
-    # start_state = load_state()
-    # if start_state:
-    #     masterenckey = start_state["masterEncKey"]
-    #     uid = start_state["UID"]
-    #     did = start_state["DID"]
-    #     print("Saved state loaded.")
-    # else:
-        uid, did, masterenckey = init_reg(serveradmincert_str)
-        # state["masterEncKey"] = masterenckey
-        # state["UID"] = uid
-        # state["DID"] = did
-        # save_state(state)
-        return uid, did, masterenckey, serveradminprivatekey
+    serveradminprivatekey = dsa.generate_private_key(key_size=2048)
+    serveradmincert = serveradminprivatekey.public_key()
+    serveradmincert_bytes = serveradmincert.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    serveradmincert_str = base64.b64encode(serveradmincert_bytes).decode()
+    uid, did, masterenckey = initialisation(serveradmincert_str)
+    return uid, did, masterenckey, serveradminprivatekey
 
 # ----------------- MAIN -----------------
 UID, DID, masterEncKey, serveradminPrivateKey = runServerAdmin()
