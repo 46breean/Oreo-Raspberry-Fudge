@@ -311,7 +311,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
 
                                 try:
                                     print("Format: 1 2 3 4 5 (e.g.)")
-                                    dataIDs = str(input("Enter DataIDs separated by space: "))
+                                    dataIDs = str(input("Enter Data IDs separated by space: "))
                                     dataIDs = list(map(int, dataIDs.split()))
                                     
                                     try:
@@ -358,7 +358,7 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
                                     for key, value in StudentData.items():
                                         print(f"{key}: {value}")
 
-                                    print("Format: {DataID1:'Student Data 1', DataID2:'Student Data 2'}")
+                                    print("Format: {Data ID1:'Student Data 1', Data ID2:'Student Data 2'}")
                                     SData = ast.literal_eval(input("Enter student data to be added: "))
 
                                     message_str = "Encrypt Data"
@@ -408,19 +408,19 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
 
                     elif database == 2:
                         print("\n===== Encrypted Index Database Editing =====")
-                        indexes = [index.strip() for index in input("Enter list of indexes you would like to edit, separated by commas: ").split(",")]
+                        indexes = [index.strip() for index in input("Enter list of queries you would like to edit, separated by commas: ").split(",")]
                         entries = len(indexes)
                         for i in range(entries):
                             index = str(indexes[i])
-                            print(f"\nCurrently editing: index {index}.")
+                            print(f"\nCurrently editing: Query {index}.")
                             hashed_index = hash_str(index) % p
 
                             # validate lambda(x) for hashed_index
                             try:
                                 validate_x_or_raise(hashed_index, p, known_factors=P_MINUS_1_FACTORS)
                             except ValueError as e:
-                                print("Invalid index value:", e)
-                                print("Please choose a different index.")
+                                print("Invalid query value:", e)
+                                print("Please choose a different query.")
                                 continue
 
                             r1 = random_coprime(p - 1)
@@ -447,13 +447,13 @@ def fn_selection(uid: int, did: int, dk: int, adminip: str, adminport: int, devi
 
                             r1_inv = pow(r1, -1, p - 1)
                             unblinded1 = pow(blinded2, r1_inv, p)
-                            print("You can edit this index in 2 ways: ")
+                            print("You can edit this query in 2 ways: ")
                             print("1. Add Data IDs only")
                             print("2. Remove Data IDs only")
                             addOrRemove = 0
                             while addOrRemove != 1 and addOrRemove != 2:
                                 addOrRemove = int(input("Select your editing type: "))
-                            dataIDs = [DataID.strip() for DataID in input("\nEnter the Data IDs you would like to add/remove, separated by commas: ").split(",")]
+                            dataIDs = [DataID.strip() for DataID in input("\nEnter the Data IDs you would like to add or remove, separated by commas: ").split(",")]
                             try:
                                 resp3 = requests.post(
                                     f"{SERVER}/edit/step3", 
