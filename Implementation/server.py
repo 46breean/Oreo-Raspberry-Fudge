@@ -1,10 +1,4 @@
-import random
-import math
-import uvicorn
-import pickle
-import os
-import base64
-import hashlib
+import random, math, uvicorn, base64, hashlib
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import TypedDict, cast
