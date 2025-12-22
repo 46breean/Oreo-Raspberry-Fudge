@@ -1,4 +1,4 @@
-import random, math, uvicorn, base64, hashlib
+import random, math, uvicorn, base64
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import TypedDict, cast
@@ -33,11 +33,6 @@ def random_coprime(p_minus_1: int) -> int:
         r = random.randint(2, p_minus_1)
         if math.gcd(r, p_minus_1) == 1:
             return r
-
-def hash_int(x: int):
-    m = hashlib.sha256()
-    m.update(str(x).encode())
-    return int(m.hexdigest(), 16)
 
 app = FastAPI(title="Encrypted Indexing Server", version="1.0.0")  # , lifespan=lifespan
 
@@ -363,7 +358,6 @@ def eval_step2(req: EvalStep2Request):
     r2 = r2_store.pop(key)
     r2_inv = pow(r2, -1, P - 1)
     final_value = pow(req.unblinded1, r2_inv, P)
-    final_value = hash_int(final_value)
 
     user_index = userDB[req.uid]["indexData"]
     user_student = userDB[req.uid]["studentData"]
@@ -467,8 +461,6 @@ def edit_step3(req: EditStep3Request):
     r2 = r2_store.pop(key)
     r2_inv = pow(r2, -1, P - 1)
     final_value = pow(req.unblinded1, r2_inv, P)
-
-    final_value = hash_int(final_value)
 
     user_index = userDB[req.uid]["indexData"]
     int_ids = [int(id_str) for id_str in req.dataIDs]
