@@ -6,7 +6,7 @@ from cryptography.exceptions import InvalidSignature
 from typing import cast
 import requests, random, math, hashlib, socket, sys, threading, json, base64, os, subprocess, tempfile, time
 
-SERVER = "http://172.22.13.14:8000"
+SERVER = "http://127.0.0.1:8000"
 
 devices: dict[int, str] = {}
 cert_dict: dict[int, bytes] = {}
