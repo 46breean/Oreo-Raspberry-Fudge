@@ -1,12 +1,20 @@
 # Oblivious Revocable Functions and Encrypted Indexing in Inter-School Networks
 
-## A fully functional project written in Python using FastAPI for management of student data!
-
 This project is part of a Research @ Young Defence Scientists Programme (R@YDSP) initiative, in conjunction with DSO National Laboratories INFO/IS division. The Meetings folder shows our research progress over the year, while the Implementation folder contains the source code for the different parties of our system in Python.
+
+## Abstract
+
+Secure multi-device encrypted indexing on untrusted servers presents a fundamental challenge. Firstly, authorised devices must obtain consistent access to shared data, while revoked devices must be denied access without relying on the server to enforce access control. Secondly, the server cannot gain information about encrypted data through identifiers used for indexing.
+
+Oblivious Revocable Functions (ORFs) resolve this cryptographically. ORFs allow authorised devices to jointly evaluate a function with consistent output across devices of the same user, while ensuring revoked devices are no longer capable of producing valid evaluations. The server also learns nothing about the secret inputs.
+
+We implement an ORF-based system in Python for a multi-school server setting, where teachers upload encrypted student records of their respective schools and query them via encrypted indexes. Teachers can be revoked when they are no longer part of the school. During implementation, we identified security weaknesses in naïve constructions, including vulnerabilities in key derivation and encrypted indexing. We then introduce improved algorithms with mathematical justifications.
+
+Our prototype demonstrates that ORFs offer an elegant and practical solution to secure, revocable, and oblivious access control in real-world multi-device systems, and highlights the practical design choices needed to make ORF-based access control secure and usable.
 
 ## Project Report and Poster
 
-You can refer to our project report and poster for more information on our system, including mathematical proofs justifying our implemented algorithms.
+You can refer to our project report and poster for more information on our system.
 
 [(Coming soon!)](https://www.dsta.gov.sg/staticfile/ydsp/projects/index.html)
 
@@ -19,4 +27,5 @@ Currently, the IP Address stated in the source code is a loopback address, causi
 This project will not be edited from 2026 onwards. Do consider improving upon issues for your own benefit!
 
 ## Acknowledgements
-[Paper 2022/1044 - Oblivious Revocable Functions and Encrypted Indexing](https://eprint.iacr.org/2022/1044.pdf)
+
+We would like to thank our mentors, Dr Ruth Ng Ii-Yung, Mr Low Zhi You Gabriel, and Mr Lee Mung Liang Ryan, for their constant support and guidance throughout our project.
