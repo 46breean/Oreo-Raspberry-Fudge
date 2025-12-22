@@ -125,7 +125,7 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
 
                     subprocess.Popen([
                         "start", "cmd", "/c",
-                        sys.executable, "devregistration.py",
+                        sys.executable, "devregistration.exe",
                         str(uid), str(did),
                         str(deviceName),
                         str(keyproduct), str(tmp_path)
