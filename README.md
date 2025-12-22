@@ -16,7 +16,7 @@ Our prototype demonstrates that ORFs offer an elegant and practical solution to 
 
 ## Project Report and Poster
 
-You can refer to our project report and poster for more information on our system.
+Refer to our project report and poster for more information on our system.
 
 [(Coming soon!)](https://www.dsta.gov.sg/staticfile/ydsp/projects/index.html)
 
@@ -24,7 +24,7 @@ You can refer to our project report and poster for more information on our syste
 
 Run the executables in the following order: server.exe -> serveradmin.exe -> useradmin.exe -> device.exe. Multiple user administrators can be instantiated, and multiple devices can be instantiated under each user administrator. There can only be one server and one server administrator per session.
 
-Currently, the IP Address stated in the source code is a loopback address, causing the system to only run on one device. However, our system works across multiple devices on the same Wi-Fi network too! Simply change the IP Address under the global variable SERVER in all source code files (except server.py itself) to the IPv4 address of the device that the server is hosted on.
+Currently, the IP Address stated in the source code is a loopback address, causing the system to only run on one device. However, our system can work across multiple devices on the same Wi-Fi network by changing the IP Address under the global variable SERVER in all source code files (except server.py itself) to the IPv4 address of the device that the server is hosted on.
 
 ## Acknowledgements
 
