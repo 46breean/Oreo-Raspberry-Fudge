@@ -1,6 +1,6 @@
 # Oblivious Revocable Functions and Encrypted Indexing in Inter-School Networks
 
-This project is part of the Research @ Young Defence Scientists Programme (R@YDSP), jointly organised by the Defence Science and Technology Agency (DSTA) and DSO National Laboratories. 
+This project is part of the Research @ Young Defence Scientists Programme (R@YDSP), an initiative by the Defence Science and Technology Agency (DSTA) and DSO National Laboratories. 
 
 Refer to the Meetings folder for our weekly progress, and refer to the Source Code folder for the source code to our system. Executables are in the root directory.
 
