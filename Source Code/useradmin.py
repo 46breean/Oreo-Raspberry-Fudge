@@ -124,12 +124,9 @@ def inbound_socket(uid:int, did:int, keyproduct:list[int], schoolcert:dsa.DSAPub
                     tmp.close()
 
                     subprocess.Popen([
-                        "start", "cmd", "/c",
-                        sys.executable, "devregistration.exe",
-                        str(uid), str(did),
-                        str(deviceName),
-                        str(keyproduct), str(tmp_path)
-                    ], shell=True)
+                        "devregistration.exe",
+                        str(uid), str(did), str(deviceName), str(keyproduct), str(tmp_path)
+                    ], creationflags=subprocess.CREATE_NEW_CONSOLE)
 
                     while not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
                         time.sleep(0.2)
