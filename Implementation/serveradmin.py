@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
 from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.exceptions import InvalidSignature
 
-SERVER = "http://172.22.13.14:8000"
+SERVER = "http://127.0.0.1:8000"
 active_otps: dict[str, int|None] = {}
 unrevoked_uids: dict[str, int|None] = {} # name : uid
 school_certs: dict[int, dsa.DSAPublicKey|None] = {} # uid : cert
